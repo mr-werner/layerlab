@@ -29,6 +29,9 @@ const handlers = {
     return { bytes: await blob.arrayBuffer() };
   },
   forget: ({ id }) => engine.forgetImport(id),
+  previewGroups: ({ groups, holes }) => ({ meshes: engine.previewGroups(groups, holes) }),
+  warm: ({ objects }) => engine.warm(objects),
+  exportColor: ({ groups, holes, title }) => engine.exportColorThreeMF(groups, holes, title),
 };
 
 self.onmessage = async ({ data }) => {
@@ -38,8 +41,9 @@ self.onmessage = async ({ data }) => {
     const result = await handlers[kind](payload);
     const transfer = [];
     if (result?.vertices) transfer.push(result.vertices.buffer, result.triangles.buffer);
-    if (result?.mesh?.vertices) transfer.push(result.mesh.vertices.buffer, result.mesh.triangles.buffer);
+    if (result?.mesh?.vertices) transfer.push(result.mesh.vertices.buffer, result.mesh.triangles.buffer, ...(result.mesh.normals ? [result.mesh.normals.buffer] : []));
     if (result?.bytes) transfer.push(result.bytes);
+    for (const m of result?.meshes || []) transfer.push(m.vertices.buffer, m.normals.buffer, m.triangles.buffer);
     self.postMessage({ reqId, ok: true, result }, transfer);
   } catch (err) {
     self.postMessage({ reqId, ok: false, error: err?.message || String(err) });

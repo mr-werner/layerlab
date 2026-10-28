@@ -1,22 +1,38 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Preview from "./Preview.jsx";
-import { Control, Swatches } from "./Controls.jsx";
-import { useBuild, inches, download } from "./useBuild.js";
+import { Control, RegionColors } from "./Controls.jsx";
+import { useBuild, colorGroups, inches, download } from "./useBuild.js";
 import { Header } from "../site/Chrome.jsx";
-import { KITS, KIT_BY_ID, defaultValues, cleanValues, randomValues, buildKit } from "../kits.js";
+import { KITS, KIT_BY_ID, defaultValues, cleanValues, randomValues, buildKit, kitRegions, defaultColors } from "../kits.js";
 import { PRODUCT_BY_ID } from "../catalog.js";
 import { cad } from "../cad/client.js";
 import { BUILD_VOLUME, COLORS, SITE, estimatePrice } from "../config.js";
 import "./maker.css";
 
 const STUDIO_KEY = "layerlab:studio:v1";
+const HEX = /^[0-9a-f]{6}$/i;
+const geomKey = (p) => `${p.type}:${JSON.stringify(p.params)}`;
+
+// Colors in links are region=hex pairs: cs=skin.e86aa6,hat.6c4bb4
+const packColors = (colors) =>
+  Object.entries(colors)
+    .map(([r, c]) => `${r}.${c.slice(1)}`)
+    .join(",");
+function unpackColors(kit, text, base) {
+  const out = defaultColors(kit, base);
+  for (const pair of (text || "").split(",")) {
+    const [r, c] = pair.split(".");
+    if (r in out && HEX.test(c || "")) out[r] = "#" + c.toLowerCase();
+  }
+  return out;
+}
 
 function readStart() {
   const q = new URLSearchParams(window.location.search);
   const product = PRODUCT_BY_ID[q.get("p")];
   if (product) {
     const kit = KIT_BY_ID[product.kit];
-    return { kit, values: cleanValues(kit, { ...defaultValues(kit), ...product.values }), color: product.color || COLORS[4].value };
+    return { kit, values: cleanValues(kit, { ...defaultValues(kit), ...product.values }), colors: defaultColors(kit, product.color || COLORS[4].value) };
   }
   const kit = KIT_BY_ID[q.get("kit")] || KITS[0];
   let values = defaultValues(kit);
@@ -25,27 +41,77 @@ function readStart() {
   } catch {
     /* a broken link just starts from the defaults */
   }
-  const color = COLORS.find((c) => c.value === "#" + (q.get("c") || ""))?.value || COLORS[4].value;
-  return { kit, values, color };
+  const base = HEX.test(q.get("c") || "") ? "#" + q.get("c").toLowerCase() : COLORS[4].value;
+  return { kit, values, colors: unpackColors(kit, q.get("cs"), base) };
+}
+
+// Thumbnail mode (?shot=1) can spin the model, zoom on some regions and
+// paint the regions an option changes in the accent color.
+function readShot() {
+  const q = new URLSearchParams(window.location.search);
+  if (!q.has("shot")) return null;
+  return {
+    angle: Number(q.get("angle") || 0),
+    focus: q.get("focus") ? q.get("focus").split(",") : null,
+    min: Number(q.get("min") || 0),
+    hl: q.get("hl") ? q.get("hl").split(",") : null,
+  };
 }
 
 export default function Maker() {
   const start = useMemo(readStart, []);
   const [kit, setKit] = useState(start.kit);
   const [values, setValues] = useState(start.values);
-  const [color, setColor] = useState(start.color);
+  const [colors, setColors] = useState(start.colors);
   const [history, setHistory] = useState([]);
   const [tab, setTab] = useState(start.kit.options[0].group);
   const [spin, setSpin] = useState(true);
   const [panel, setPanel] = useState(null); // order | null
   const [toast, setToast] = useState("");
   const previewRef = useRef(null);
-  const shot = new URLSearchParams(window.location.search).has("shot");
+  const shotOpts = useMemo(readShot, []);
+  const shot = !!shotOpts;
+  const regions = useMemo(() => kitRegions(kit), [kit]);
 
-  const groups = useMemo(() => [...new Set(kit.options.map((o) => o.group)), "Color"], [kit]);
+  const groups = useMemo(() => [...new Set(kit.options.map((o) => o.group)), "Colors"], [kit]);
   const parts = useMemo(() => buildKit(kit, values), [kit, values]);
 
-  const { mesh, size, status, error } = useBuild(parts);
+  const { meshes, size, status, error } = useBuild(parts);
+
+  // While nothing is happening, get the other choices ready in the engine so
+  // clicking one shows up right away.
+  const warmed = useRef(new Set());
+  useEffect(() => {
+    if (status !== "ready" || shot) return;
+    let stop = false;
+    const have = new Set(parts.map(geomKey));
+    const queue = [];
+    for (const op of kit.options) {
+      if (op.type !== "choice") continue;
+      for (const c of op.choices) {
+        if (c.value === values[op.id]) continue;
+        let list;
+        try {
+          list = buildKit(kit, { ...values, [op.id]: c.value });
+        } catch {
+          continue;
+        }
+        const fresh = list.filter((p) => !have.has(geomKey(p)) && !warmed.current.has(geomKey(p)));
+        if (fresh.length) queue.push(fresh);
+      }
+    }
+    (async () => {
+      for (const objs of queue) {
+        await new Promise((r) => setTimeout(r, 60));
+        if (stop) return;
+        objs.forEach((p) => warmed.current.add(geomKey(p)));
+        await cad("warm", { objects: objs }).catch(() => {});
+      }
+    })();
+    return () => {
+      stop = true;
+    };
+  }, [status, kit, values, parts, shot]);
 
   // On phones the base list scrolls sideways; keep the chosen one in view.
   useEffect(() => {
@@ -55,9 +121,9 @@ export default function Maker() {
   // Keep the address shareable.
   useEffect(() => {
     if (shot) return;
-    const q = new URLSearchParams({ kit: kit.id, v: JSON.stringify(values), c: color.slice(1) });
+    const q = new URLSearchParams({ kit: kit.id, v: JSON.stringify(values), cs: packColors(colors) });
     window.history.replaceState(null, "", `/make?${q}`);
-  }, [kit, values, color, shot]);
+  }, [kit, values, colors, shot]);
 
   useEffect(() => {
     if (!toast) return;
@@ -65,7 +131,7 @@ export default function Maker() {
     return () => clearTimeout(t);
   }, [toast]);
 
-  const remember = useCallback(() => setHistory((h) => [...h.slice(-40), { kit, values, color }]), [kit, values, color]);
+  const remember = useCallback(() => setHistory((h) => [...h.slice(-40), { kit, values, colors }]), [kit, values, colors]);
 
   const setValue = (id, v, { commit = true } = {}) => {
     if (commit) remember();
@@ -77,6 +143,7 @@ export default function Maker() {
     remember();
     setKit(k);
     setValues(defaultValues(k));
+    setColors(defaultColors(k, Object.values(colors)[0]));
     setTab(k.options[0].group);
     setSpin(true);
   };
@@ -87,13 +154,15 @@ export default function Maker() {
     setHistory((h) => h.slice(0, -1));
     setKit(last.kit);
     setValues(last.values);
-    setColor(last.color);
+    setColors(last.colors);
   };
 
   const surprise = () => {
     remember();
     setValues(randomValues(kit, values));
-    setColor(COLORS[Math.floor(Math.random() * COLORS.length)].value);
+    const pick = () => COLORS[Math.floor(Math.random() * COLORS.length)].value;
+    const one = pick();
+    setColors(Object.fromEntries(regions.map((r) => [r.id, regions.length > 2 ? pick() : one])));
   };
 
   const reset = () => {
@@ -105,12 +174,19 @@ export default function Maker() {
   const price = size && fits ? estimatePrice(size) : null;
   const fileBase = `${kit.id}-${(values.text || kit.name).toString().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || kit.id}`;
 
-  const saveFile = async (format = "stl") => {
+  const colorCount = new Set(regions.map((r) => colors[r.id])).size;
+  const saveFile = async (format = colorCount > 1 ? "3mf" : "stl") => {
     try {
       setToast("Getting your file ready…");
-      const { bytes } = await cad("export", { objects: parts, format, fast: true });
-      download(`${fileBase}.${format === "step" ? "stp" : "stl"}`, bytes, "application/octet-stream");
-      setToast("Saved! Check your downloads.");
+      if (format === "3mf") {
+        const { groups: g, holes } = colorGroups(parts, regions, colors);
+        const { bytes } = await cad("exportColor", { groups: g, holes, title: kit.name });
+        download(`${fileBase}.3mf`, bytes, "model/3mf");
+      } else {
+        const { bytes } = await cad("export", { objects: parts, format, fast: true });
+        download(`${fileBase}.${format === "step" ? "stp" : "stl"}`, bytes, "application/octet-stream");
+      }
+      setToast(format === "3mf" ? "Saved a .3mf with every color. Check your downloads." : "Saved! Check your downloads.");
     } catch (e) {
       setToast(e.message);
     }
@@ -118,7 +194,7 @@ export default function Maker() {
 
   const openStudio = () => {
     try {
-      localStorage.setItem(STUDIO_KEY, JSON.stringify({ name: `My ${kit.name.toLowerCase()}`, color, objects: parts }));
+      localStorage.setItem(STUDIO_KEY, JSON.stringify({ name: `My ${kit.name.toLowerCase()}`, color: colors[regions[0].id], objects: parts }));
     } catch {
       /* private windows can block storage; the studio then opens empty */
     }
@@ -137,7 +213,17 @@ export default function Maker() {
   if (shot) {
     return (
       <div className="shot">
-        <Preview ref={previewRef} mesh={mesh} color={color} spin={false} background={null} table={false} />
+        <Preview
+          ref={previewRef}
+          meshes={meshes}
+          colors={shotOpts.hl ? Object.fromEntries(regions.map((r) => [r.id, shotOpts.hl.includes(r.id) ? "#7a66ff" : "#d8d4cc"])) : colors}
+          spin={false}
+          angle={shotOpts.angle}
+          focus={shotOpts.focus}
+          focusMin={shotOpts.min}
+          background={null}
+          table={false}
+        />
         {status === "ready" && <span id="shot-ready" data-size={size?.map((x) => x.toFixed(1)).join(",")} />}
       </div>
     );
@@ -170,7 +256,7 @@ export default function Maker() {
 
         <section className="mk-stage">
           <div className="mk-view">
-            <Preview ref={previewRef} mesh={mesh} color={color} spin={spin} onSpinStop={() => setSpin(false)} />
+            <Preview ref={previewRef} meshes={meshes} colors={colors} spin={spin} onSpinStop={() => setSpin(false)} />
             {status === "warming" && (
               <div className="mk-loading">
                 <div className="mk-spark" />
@@ -220,16 +306,17 @@ export default function Maker() {
             ))}
           </div>
           <div className="mk-controls" role="tabpanel">
-            {tab === "Color" ? (
-              <Swatches
-                color={color}
-                onPick={(c) => {
+            {tab === "Colors" ? (
+              <RegionColors
+                regions={regions}
+                colors={colors}
+                onChange={(c) => {
                   remember();
-                  setColor(c);
+                  setColors(c);
                 }}
               />
             ) : (
-              options.map((op) => <Control key={op.id} op={op} value={values[op.id]} onChange={setValue} />)
+              options.map((op) => <Control key={op.id} op={op} value={values[op.id]} onChange={setValue} kitId={kit.id} />)
             )}
           </div>
           <div className="mk-quick">
@@ -247,7 +334,7 @@ export default function Maker() {
               Order this print
             </button>
             <div className="mk-actions-row">
-              <button onClick={() => saveFile("stl")} disabled={!size}>
+              <button onClick={() => saveFile()} disabled={!size} title={colorCount > 1 ? "A .3mf file with every color" : "An .stl file"}>
                 Save file
               </button>
               <button onClick={share}>Share</button>
@@ -269,9 +356,12 @@ export default function Maker() {
                 <dd>{size && `${inches(size[0])} × ${inches(size[1])} × ${inches(size[2])} in`}</dd>
               </div>
               <div>
-                <dt>Color</dt>
+                <dt>{colorCount > 1 ? `Colors (${colorCount})` : "Color"}</dt>
                 <dd>
-                  <i className="dot" style={{ background: color }} /> {COLORS.find((c) => c.value === color)?.label}
+                  {[...new Set(regions.map((r) => colors[r.id]))].map((c) => (
+                    <i key={c} className="dot" style={{ background: c }} title={COLORS.find((x) => x.value === c)?.label} />
+                  ))}{" "}
+                  {colorCount === 1 && COLORS.find((c) => c.value === colors[regions[0].id])?.label}
                 </dd>
               </div>
               <div>
@@ -284,7 +374,7 @@ export default function Maker() {
               placeholder estimate.
             </p>
             <div className="mk-modal-actions">
-              <button className="primary" onClick={() => saveFile("stl")}>
+              <button className="primary" onClick={() => saveFile()}>
                 Save my 3D file
               </button>
               <button onClick={share}>Copy link</button>

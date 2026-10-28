@@ -1,24 +1,69 @@
 // The inputs shared by the maker and the remixer: sliders with − and +,
-// choice tiles, switches, text and the color swatches.
+// picture tiles for choices, switches, text and the color pickers.
+import { useState } from "react";
 import { COLORS } from "../config.js";
+import ART from "../optionArt.json";
 
-export function Swatches({ color, onPick }) {
+const colorName = (v) => COLORS.find((c) => c.value === v)?.label || "Custom";
+
+export function Swatches({ color, onPick, label = "Color" }) {
   return (
     <div className="mk-field">
       <span className="mk-label">
-        Color <em>{COLORS.find((c) => c.value === color)?.label}</em>
+        {label} <em>{colorName(color)}</em>
       </span>
       <div className="mk-swatches">
         {COLORS.map((c) => (
           <button key={c.value} className={c.value === color ? "on" : ""} style={{ "--sw": c.value }} onClick={() => onPick(c.value)} aria-label={c.label} title={c.label} />
         ))}
       </div>
-      <p className="mk-hint">One filament color per print. Ask about two-color prints when you order.</p>
     </div>
   );
 }
 
-export function Control({ op, value, onChange }) {
+// One color per part: pick a part, then its color. "Everything" paints all.
+export function RegionColors({ regions, colors, onChange, active, onActive }) {
+  const [own, setOwn] = useState(null);
+  const current = active ?? own ?? regions[0].id;
+  const setCurrent = onActive || setOwn;
+  const paint = (region, value) => onChange(region === "*" ? Object.fromEntries(regions.map((r) => [r.id, value])) : { ...colors, [region]: value });
+  const used = new Set(Object.values(colors)).size;
+  return (
+    <>
+      {regions.length > 1 && (
+        <div className="mk-field">
+          <span className="mk-label">
+            Part <em>{used === 1 ? "1 color" : `${used} colors`}</em>
+          </span>
+          <div className="mk-regions">
+            {regions.map((r) => (
+              <button key={r.id} className={current === r.id ? "on" : ""} onClick={() => setCurrent(r.id)}>
+                <i style={{ background: colors[r.id] }} />
+                {r.label}
+              </button>
+            ))}
+            <button className={current === "*" ? "on" : ""} onClick={() => setCurrent("*")}>
+              <i className="all" />
+              Everything
+            </button>
+          </div>
+        </div>
+      )}
+      <Swatches
+        label={current === "*" ? "Color for everything" : `${regions.find((r) => r.id === current)?.label || "Color"}`}
+        color={current === "*" ? (used === 1 ? Object.values(colors)[0] : null) : colors[current]}
+        onPick={(v) => paint(current, v)}
+      />
+      <p className="mk-hint">
+        {used > 1
+          ? `This prints in ${used} colors on a multi-color printer. "Save file" gives you a .3mf with every color.`
+          : "Pick a part above to give it its own color."}
+      </p>
+    </>
+  );
+}
+
+export function Control({ op, value, onChange, kitId }) {
   const id = `op-${op.id}`;
   if (op.type === "slider") {
     const shown = op.unit === "mm" ? `${value} mm` : op.unit ? `${value}${op.unit}` : value;
@@ -51,10 +96,13 @@ export function Control({ op, value, onChange }) {
     );
   }
   if (op.type === "choice") {
+    const pics = op.choices.filter((c) => ART[`${kitId}/${op.id}/${c.value}`]).length === op.choices.length;
     return (
       <div className="mk-field" role="radiogroup" aria-label={op.label}>
-        <span className="mk-label">{op.label}</span>
-        <div className="mk-choices">
+        <span className="mk-label">
+          {op.label} <em>{op.choices.find((c) => c.value === value)?.label}</em>
+        </span>
+        <div className={`mk-choices ${pics ? "pics" : ""}`}>
           {op.choices.map((c) => (
             <button
               key={c.value}
@@ -63,7 +111,8 @@ export function Control({ op, value, onChange }) {
               className={`${value === c.value ? "on" : ""} ${op.id === "font" ? "font-" + c.value.replace(/\s+/g, "-").toLowerCase() : ""}`}
               onClick={() => onChange(op.id, c.value)}
             >
-              {c.label}
+              {pics && <img src={`/opts/${kitId}/${op.id}-${c.value}.webp`} alt="" loading="lazy" />}
+              <span>{c.label}</span>
             </button>
           ))}
         </div>

@@ -1,8 +1,12 @@
 import { useEffect, useState } from "react";
 import { Header, Footer } from "./Chrome.jsx";
-import { ProductCard } from "./Landing.jsx";
+import { ModelCard } from "./Gallery.jsx";
 import { CATEGORIES, PRODUCTS, SEASONS } from "../catalog.js";
+import { OUR_ITEMS } from "../gallery.js";
 import "./site.css";
+
+const ITEMS = OUR_ITEMS.filter((i) => i.kind !== "figure");
+const BY_ID = Object.fromEntries(PRODUCTS.map((p) => [p.id, p]));
 
 export default function Shop() {
   const q = new URLSearchParams(window.location.search);
@@ -16,63 +20,61 @@ export default function Shop() {
     window.history.replaceState(null, "", `/shop${p.toString() ? "?" + p : ""}`);
   }, [cat, season]);
 
-  const list = PRODUCTS.filter((p) => (cat === "all" || p.category === cat) && (season === "all" || p.season === season));
+  const list = ITEMS.filter((i) => (cat === "all" || BY_ID[i.id].category === cat) && (season === "all" || BY_ID[i.id].season === season));
 
   return (
     <div className="site">
       <Header active="/shop" />
-      <section className="page-head">
-        <p className="eyebrow">Shop</p>
-        <h1>Ready-mades, made to be changed</h1>
-        <p>Every item is a starting point. Open one to change its size, words, face or color before you order.</p>
-      </section>
-
-      <section className="filters" aria-label="Filter the shop">
-        <div className="filter-row">
-          <span>Kind</span>
-          <button className={`chip ${cat === "all" ? "on" : ""}`} onClick={() => setCat("all")}>
-            Everything
-          </button>
-          {CATEGORIES.map((c) => (
-            <button key={c.id} className={`chip ${cat === c.id ? "on" : ""}`} onClick={() => setCat(c.id)}>
-              {c.name}
+      <section className="gallery-head">
+        <h1>Shop</h1>
+        <p className="lede">Ready-made LayerLab models. Every one opens in the maker so you can change its shape, words and colors first.</p>
+        <div className="gallery-bar">
+          <div className="topics">
+            <button className={cat === "all" ? "on" : ""} onClick={() => setCat("all")}>
+              Everything
             </button>
-          ))}
-        </div>
-        <div className="filter-row">
-          <span>Season</span>
-          <button className={`chip ${season === "all" ? "on" : ""}`} onClick={() => setSeason("all")}>
-            All year
-          </button>
-          {SEASONS.map((s) => (
-            <button key={s.id} className={`chip ${season === s.id ? "on" : ""}`} onClick={() => setSeason(s.id)}>
-              {s.name}
+            {CATEGORIES.map((c) => (
+              <button key={c.id} className={cat === c.id ? "on" : ""} onClick={() => setCat(c.id)}>
+                {c.name}
+              </button>
+            ))}
+          </div>
+          <div className="seg">
+            <button className={season === "all" ? "on" : ""} onClick={() => setSeason("all")}>
+              All year
             </button>
-          ))}
+            {SEASONS.filter((s) => s.id !== "anytime").map((s) => (
+              <button key={s.id} className={season === s.id ? "on" : ""} onClick={() => setSeason(s.id)}>
+                {s.name}
+              </button>
+            ))}
+          </div>
         </div>
       </section>
 
-      <section className="shop-grid">
+      <section className="gallery">
         {list.length ? (
-          <div className="grid">
-            {list.map((p) => (
-              <ProductCard key={p.id} p={p} />
+          <div className="mgrid">
+            {list.map((i) => (
+              <ModelCard key={i.id} item={i} />
             ))}
           </div>
         ) : (
-          <p className="empty">
-            Nothing here yet. <button className="linkish" onClick={() => (setCat("all"), setSeason("all"))}>Show everything</button> or{" "}
-            <a href="/make">make your own</a>.
+          <p className="grid-note">
+            Nothing here yet.{" "}
+            <button className="linkish" onClick={() => (setCat("all"), setSeason("all"))}>
+              Show everything
+            </button>
           </p>
         )}
       </section>
 
-      <section className="make-own">
-        <h2>Don't see it here?</h2>
-        <p>Search the model mall for anything else, then bring the file back to recolor and resize it. Or build a figure from scratch.</p>
+      <section className="cta-band">
+        <h2>Don't see it?</h2>
+        <p>Search thousands more models in the gallery, or build a character from scratch.</p>
         <div className="row-ctas">
-          <a className="btn lime" href="/discover">
-            Search the mall
+          <a className="btn primary" href="/discover">
+            Explore models
           </a>
           <a className="btn" href="/make?kit=figure">
             Build a figure

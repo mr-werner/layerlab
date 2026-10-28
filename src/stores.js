@@ -30,6 +30,16 @@ export const FLAGS = {
 // open their browse page instead.
 export const STORES = [
   {
+    id: "sketchfab",
+    name: "Sketchfab",
+    by: "Epic Games",
+    url: "https://sketchfab.com/3d-models/categories?features=downloadable&tags=3dprint",
+    search: (q) => `https://sketchfab.com/search?features=downloadable&tags=3dprint&type=models&q=${encodeURIComponent(q)}`,
+    flag: "varies",
+    good: "Shown live on LayerLab: spin any model before you download",
+    hue: "#1caad9",
+  },
+  {
     id: "printables",
     name: "Printables",
     by: "Prusa Research",
@@ -145,9 +155,9 @@ export const LICENSE_BY_ID = Object.fromEntries(LICENSES.map((l) => [l.id, l]));
 // Remembers which store someone went to, so the remix page can ask about
 // that store's license when they come back with a file.
 const TRIP_KEY = "layerlab:trip:v1";
-export function rememberTrip(storeId, q) {
+export function rememberTrip(storeId, q, model = null) {
   try {
-    sessionStorage.setItem(TRIP_KEY, JSON.stringify({ store: storeId, q, at: Date.now() }));
+    sessionStorage.setItem(TRIP_KEY, JSON.stringify({ store: storeId, q, model, at: Date.now() }));
   } catch {
     /* storage can be blocked; the remix page then just asks */
   }

@@ -2,19 +2,20 @@
 // recolor it and add a name stand before ordering a print.
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Preview from "./Preview.jsx";
-import { Control, Swatches } from "./Controls.jsx";
-import { useBuild, inches, download } from "./useBuild.js";
+import { Control, RegionColors } from "./Controls.jsx";
+import { useBuild, colorGroups, inches, download } from "./useBuild.js";
 import { saveRemix, loadRemix, clearRemix } from "./fileStore.js";
 import { Header } from "../site/Chrome.jsx";
-import { REMIX_OPTIONS, remixDefaults, remixParts } from "../remix.js";
+import { REMIX_OPTIONS, REMIX_REGIONS, remixDefaults, remixParts } from "../remix.js";
 import { STORES, STORE_BY_ID, FLAGS, LICENSES, LICENSE_BY_ID, lastTrip } from "../stores.js";
 import { cad } from "../cad/client.js";
+import AiMake, { useAiEnabled } from "./AiMake.jsx";
 import { BUILD_VOLUME, COLORS, SITE, estimatePrice } from "../config.js";
 import "./maker.css";
 
 const SETTINGS_KEY = "layerlab:remix:v1";
-const GROUPS = ["Size", "Turn", "Stand", "Color", "License"];
-const TYPES = /\.(stl|3mf|step|stp)$/i;
+const GROUPS = ["Size", "Turn", "Stand", "Colors", "License"];
+const TYPES = /\.(stl|3mf|step|stp|glb|gltf|obj)$/i;
 
 function readSettings() {
   try {
@@ -31,7 +32,7 @@ export default function Remix() {
   const [file, setFile] = useState(null); // { name, importId, kind, size }
   const [loading, setLoading] = useState("");
   const [values, setValues] = useState(saved?.values || remixDefaults());
-  const [color, setColor] = useState(saved?.color || COLORS[8].value);
+  const [colors, setColors] = useState(saved?.colors || { model: COLORS[8].value, stand: COLORS[0].value, name: COLORS[1].value });
   const [credit, setCredit] = useState(saved?.credit || blankCredit());
   const [history, setHistory] = useState([]);
   const [tab, setTab] = useState("Size");
@@ -39,20 +40,23 @@ export default function Remix() {
   const [over, setOver] = useState(false);
   const [panel, setPanel] = useState(null);
   const [toast, setToast] = useState("");
+  const aiOn = useAiEnabled();
   const previewRef = useRef(null);
   const picker = useRef(null);
 
   const license = LICENSE_BY_ID[credit.license] || LICENSE_BY_ID.unknown;
   const parts = useMemo(() => (file ? remixParts(file, values, { allowEdits: license.canEdit }) : null), [file, values, license.canEdit]);
-  const { mesh, size, status, error } = useBuild(parts);
+  const { meshes, size, status, error } = useBuild(parts);
+  const regions = useMemo(() => REMIX_REGIONS.filter((r) => (parts || []).some((p) => p.region === r.id)), [parts]);
+  const colorCount = new Set(regions.map((r) => colors[r.id])).size;
 
   useEffect(() => {
     try {
-      localStorage.setItem(SETTINGS_KEY, JSON.stringify({ values, color, credit }));
+      localStorage.setItem(SETTINGS_KEY, JSON.stringify({ values, colors, credit }));
     } catch {
       /* settings just won't be remembered */
     }
-  }, [values, color, credit]);
+  }, [values, colors, credit]);
 
   useEffect(() => {
     if (!toast) return;
@@ -70,12 +74,16 @@ export default function Remix() {
         setValues(remixDefaults());
         setHistory([]);
         setSpin(true);
-        setCredit(newCredit || { ...blankCredit(), store: tripStore() });
+        setCredit(newCredit || tripCredit());
         setTab("Size");
         saveRemix({ name, bytes });
       }
     } catch (e) {
-      setToast(`Couldn't open ${name}: ${e.message}`);
+      setToast(
+        /manifold/i.test(e.message)
+          ? `${name} has gaps or overlapping pieces, so it can't be printed as is. Models made for 3D printing work best.`
+          : `Couldn't open ${name}: ${e.message}`
+      );
     } finally {
       setLoading("");
     }
@@ -86,11 +94,26 @@ export default function Remix() {
     loadRemix().then((entry) => entry && bring(entry.name, entry.bytes, { fresh: false }));
   }, [bring]);
 
-  const openFiles = async (list) => {
+  const openFiles = async (list, credit) => {
     const f = [...list].find((x) => TYPES.test(x.name));
-    if (!f) return setToast("Use a .stl, .3mf or .step file.");
-    bring(f.name, await f.arrayBuffer());
+    if (!f) return setToast("Use a .stl, .3mf, .step, .glb or .obj file.");
+    let name = f.name;
+    let bytes = await f.arrayBuffer();
+    if (/\.(glb|gltf|obj)$/i.test(name)) {
+      setLoading(`Converting ${name}…`);
+      try {
+        const { toSTL } = await import("./convert.js");
+        ({ name, bytes } = await toSTL(name, bytes));
+      } catch (e) {
+        setLoading("");
+        return setToast(`Couldn't read ${f.name}: ${e.message}`);
+      }
+    }
+    bring(name, bytes, credit && { newCredit: credit });
   };
+
+  const fromAi = (name, bytes, prompt) =>
+    openFiles([new File([bytes], name)], { store: "", license: "store", designer: `Meshy AI: “${prompt}”`, link: "https://www.meshy.ai/" });
 
   const trySample = async () => {
     const res = await fetch("/samples/rocket.stl");
@@ -102,7 +125,7 @@ export default function Remix() {
     clearRemix();
   };
 
-  const remember = () => setHistory((h) => [...h.slice(-40), { values, color }]);
+  const remember = () => setHistory((h) => [...h.slice(-40), { values, colors }]);
   const setValue = (id, v, { commit = true } = {}) => {
     if (commit) remember();
     setValues((cur) => ({ ...cur, [id]: v }));
@@ -112,7 +135,7 @@ export default function Remix() {
     if (!last) return;
     setHistory((h) => h.slice(0, -1));
     setValues(last.values);
-    setColor(last.color);
+    setColors(last.colors);
   };
   const reset = () => {
     remember();
@@ -134,8 +157,14 @@ export default function Remix() {
   const saveFile = async () => {
     try {
       setToast("Getting your file ready…");
-      const { bytes } = await cad("export", { objects: parts, format: "stl", fast: true });
-      download(`${baseName}-remix.stl`, bytes, "application/octet-stream");
+      if (colorCount > 1) {
+        const { groups, holes } = colorGroups(parts, REMIX_REGIONS, colors);
+        const { bytes } = await cad("exportColor", { groups, holes, title: baseName });
+        download(`${baseName}-remix.3mf`, bytes, "model/3mf");
+      } else {
+        const { bytes } = await cad("export", { objects: parts, format: "stl", fast: true });
+        download(`${baseName}-remix.stl`, bytes, "application/octet-stream");
+      }
       setToast("Saved! Check your downloads.");
     } catch (e) {
       setToast(e.message);
@@ -159,13 +188,13 @@ export default function Remix() {
       }}
     >
       <Header active="/make" />
-      <input ref={picker} type="file" accept=".stl,.3mf,.step,.stp" hidden onChange={(e) => e.target.files.length && openFiles(e.target.files)} />
+      <input ref={picker} type="file" accept=".stl,.3mf,.step,.stp,.glb,.gltf,.obj" hidden onChange={(e) => e.target.files.length && openFiles(e.target.files)} />
       <div className="mk-grid rx-grid">
         <section className="mk-stage">
           <div className="mk-view">
             {file ? (
               <>
-                <Preview ref={previewRef} mesh={mesh} color={color} spin={spin} onSpinStop={() => setSpin(false)} />
+                <Preview ref={previewRef} meshes={meshes} colors={colors} spin={spin} onSpinStop={() => setSpin(false)} />
                 {status === "warming" && (
                   <div className="mk-loading">
                     <div className="mk-spark" />
@@ -188,7 +217,7 @@ export default function Remix() {
                   ↓
                 </div>
                 <h2>{loading || "Drop a model here"}</h2>
-                <p>Bring a .stl, .3mf or .step file you downloaded from Printables, MakerWorld, Thingiverse or anywhere else.</p>
+                <p>Bring a .stl, .3mf, .step, .glb or .obj file you downloaded from Sketchfab, Printables, MakerWorld, Thingiverse or anywhere else.</p>
                 <div className="row-ctas">
                   <button className="btn dark" onClick={() => picker.current?.click()}>
                     Choose a file
@@ -200,6 +229,7 @@ export default function Remix() {
                 <p className="fine">
                   Need a model? <a href="/discover">Search the mall</a>. Files stay on your device until you order.
                 </p>
+                {aiOn && !loading && <AiMake onModel={fromAi} />}
               </div>
             )}
             {file && loading && <div className="mk-chip building">{loading}</div>}
@@ -253,12 +283,13 @@ export default function Remix() {
                 ))}
               </div>
               <div className="mk-controls" role="tabpanel">
-                {tab === "Color" && (
-                  <Swatches
-                    color={color}
-                    onPick={(c) => {
+                {tab === "Colors" && (
+                  <RegionColors
+                    regions={regions}
+                    colors={colors}
+                    onChange={(c) => {
                       remember();
-                      setColor(c);
+                      setColors(c);
                     }}
                   />
                 )}
@@ -308,7 +339,7 @@ export default function Remix() {
                 </button>
                 <div className="mk-actions-row rx-actions">
                   <button onClick={saveFile} disabled={!size}>
-                    Save .stl
+                    {colorCount > 1 ? "Save .3mf" : "Save .stl"}
                   </button>
                   <a className="btn" href="/discover">
                     Find another
@@ -359,7 +390,9 @@ export default function Remix() {
               <div>
                 <dt>Color</dt>
                 <dd>
-                  <i className="dot" style={{ background: color }} /> {COLORS.find((c) => c.value === color)?.label}
+                  {[...new Set(regions.map((r) => colors[r.id]))].map((c) => (
+                    <i key={c} className="dot" style={{ background: c }} />
+                  ))}
                 </dd>
               </div>
               <div>
@@ -391,9 +424,12 @@ export default function Remix() {
   );
 }
 
-function tripStore() {
+// If they just came from a model page, fill in where it's from, its license
+// and who made it.
+function tripCredit() {
   const t = lastTrip();
-  return t && Date.now() - t.at < 3 * 3600 * 1000 ? t.store : "";
+  if (!t || Date.now() - t.at > 3 * 3600 * 1000) return blankCredit();
+  return { ...blankCredit(), store: t.store, ...(t.model ? { license: t.model.license, designer: t.model.designer, link: t.model.link } : {}) };
 }
 
 function CreditForm({ credit, setCredit }) {

@@ -1,11 +1,13 @@
-import { forwardRef, useEffect, useImperativeHandle, useRef } from "react";
+import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef } from "react";
 import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { geometryFromData } from "../builder/Viewport.jsx";
 
 // A friendly turntable view of one finished model. The parent passes the
 // combined mesh from the CAD worker; this only draws it.
-const Preview = forwardRef(function Preview({ mesh, color, spin = true, background = 0xeae7e1, table: showTable = true, onSpinStop }, ref) {
+// `meshes` is [{ region, mesh }] and `colors` maps region -> color; a single
+// `mesh` with one `color` works too.
+const Preview = forwardRef(function Preview({ mesh, meshes, color, colors, spin = true, angle = 0, focus = null, focusMin = 0, background = 0x15151c, table: showTable = true, onSpinStop }, ref) {
   const hostRef = useRef(null);
   const st = useRef(null);
   const spinRef = useRef(spin);
@@ -28,7 +30,7 @@ const Preview = forwardRef(function Preview({ mesh, color, spin = true, backgrou
     camera.up.set(0, 0, 1);
     camera.position.set(120, -200, 140);
 
-    scene.add(new THREE.HemisphereLight(0xffffff, 0xd9d4cc, 1.9));
+    scene.add(new THREE.HemisphereLight(0xffffff, 0x3a3a48, 1.7));
     const sun = new THREE.DirectionalLight(0xffffff, 2.1);
     sun.position.set(120, -160, 300);
     sun.castShadow = true;
@@ -43,7 +45,7 @@ const Preview = forwardRef(function Preview({ mesh, color, spin = true, backgrou
     // A round "turntable" the model sits on.
     const table = new THREE.Mesh(
       new THREE.CylinderGeometry(1, 1, 1, 96),
-      new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.85 })
+      new THREE.MeshStandardMaterial({ color: 0x262632, roughness: 0.9 })
     );
     table.rotation.x = Math.PI / 2;
     table.receiveShadow = true;
@@ -51,9 +53,8 @@ const Preview = forwardRef(function Preview({ mesh, color, spin = true, backgrou
     scene.add(table);
 
     const turn = new THREE.Group();
+    turn.rotation.z = (angle * Math.PI) / 180;
     scene.add(turn);
-
-    const material = new THREE.MeshStandardMaterial({ color: 0xf0742b, roughness: 0.55, metalness: 0.02 });
 
     const orbit = new OrbitControls(camera, renderer.domElement);
     orbit.enableDamping = true;
@@ -84,7 +85,7 @@ const Preview = forwardRef(function Preview({ mesh, color, spin = true, backgrou
     };
     raf = requestAnimationFrame(loop);
 
-    st.current = { renderer, scene, camera, orbit, turn, material, table, sun, model: null, framedFor: null };
+    st.current = { renderer, scene, camera, orbit, turn, table, sun, parts: new Map(), holder: null, framedFor: null };
     return () => {
       cancelAnimationFrame(raf);
       ro.disconnect();
@@ -94,41 +95,77 @@ const Preview = forwardRef(function Preview({ mesh, color, spin = true, backgrou
     };
   }, [background, showTable]);
 
-  // Swap in a new model mesh.
+  const list = useMemo(() => meshes || (mesh ? [{ region: "main", mesh }] : null), [meshes, mesh]);
+  const colorOf = (region) => colors?.[region] || color || "#f0742b";
+
+  // Swap in new region meshes. Unchanged regions keep their geometry.
   useEffect(() => {
     const s = st.current;
-    if (!s || !mesh) return;
-    const geom = geometryFromData(mesh);
-    const bb = geom.boundingBox;
-    const cx = (bb.min.x + bb.max.x) / 2;
-    const cy = (bb.min.y + bb.max.y) / 2;
-    geom.translate(-cx, -cy, -bb.min.z);
-    const model = new THREE.Mesh(geom, s.material);
-    model.castShadow = true;
-    model.receiveShadow = true;
-    if (s.model) {
-      s.turn.remove(s.model);
-      s.model.geometry.dispose();
+    if (!s || !list) return;
+    const box = new THREE.Box3();
+    const next = new Map();
+    for (const { region, mesh: data } of list) {
+      let entry = s.parts.get(region);
+      if (!entry || entry.data !== data) {
+        if (entry) entry.obj.geometry.dispose();
+        const geom = geometryFromData(data);
+        const mat = entry?.obj.material || new THREE.MeshStandardMaterial({ roughness: 0.55, metalness: 0.02 });
+        const obj = entry?.obj || new THREE.Mesh(geom, mat);
+        obj.geometry = geom;
+        obj.castShadow = true;
+        obj.receiveShadow = true;
+        entry = { data, obj };
+      }
+      entry.obj.material.color.set(colorOf(region));
+      next.set(region, entry);
+      box.union(entry.obj.geometry.boundingBox);
     }
-    s.turn.add(model);
-    s.model = model;
-    const size = new THREE.Vector3().subVectors(bb.max, bb.min);
+    for (const [region, entry] of s.parts) {
+      if (!next.has(region)) {
+        entry.obj.geometry.dispose();
+        entry.obj.material.dispose();
+      }
+    }
+    if (!s.holder) {
+      s.holder = new THREE.Group();
+      s.turn.add(s.holder);
+    }
+    s.holder.clear();
+    for (const { obj } of next.values()) s.holder.add(obj);
+    s.parts = next;
+    // Center the whole model on the turntable.
+    s.holder.position.set(-(box.min.x + box.max.x) / 2, -(box.min.y + box.max.y) / 2, -box.min.z);
+    s.box = box;
+    const size = new THREE.Vector3().subVectors(box.max, box.min);
     const radius = Math.max(size.x, size.y) * 0.62 + 8;
     s.table.scale.set(radius, 2, radius);
     s.table.position.z = -1;
     frame(s, size, false);
-  }, [mesh]);
+    // Thumbnails can zoom in on a few regions (a hat, a face).
+    const fb = new THREE.Box3();
+    for (const r of focus || []) if (next.has(r)) fb.union(next.get(r).obj.geometry.boundingBox);
+    if (!fb.isEmpty()) {
+      fb.translate(s.holder.position);
+      const c = fb.getCenter(new THREE.Vector3()).applyAxisAngle(new THREE.Vector3(0, 0, 1), s.turn.rotation.z);
+      const span = Math.max(...fb.getSize(new THREE.Vector3()).toArray(), focusMin, 6) * 1.25;
+      const dir = new THREE.Vector3(0.3, -0.85, 0.38).normalize();
+      s.orbit.target.copy(c);
+      s.camera.position.copy(c).addScaledVector(dir, span * 2.4);
+      s.orbit.update();
+    }
+  }, [list]);
 
   useEffect(() => {
-    if (st.current) st.current.material.color.set(color || "#f0742b");
-  }, [color]);
+    const s = st.current;
+    if (!s) return;
+    for (const [region, entry] of s.parts) entry.obj.material.color.set(colorOf(region));
+  }, [color, colors]);
 
   useImperativeHandle(ref, () => ({
     reframe: () => {
       const s = st.current;
-      if (!s?.model) return;
-      const bb = s.model.geometry.boundingBox;
-      frame(s, new THREE.Vector3().subVectors(bb.max, bb.min), true);
+      if (!s?.box) return;
+      frame(s, new THREE.Vector3().subVectors(s.box.max, s.box.min), true);
     },
     snapshot: () => st.current?.renderer.domElement.toDataURL("image/png"),
   }));

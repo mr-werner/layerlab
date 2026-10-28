@@ -2,32 +2,42 @@ import { useState } from "react";
 import { SITE } from "../config.js";
 
 const NAV = [
-  { href: "/discover", label: "Discover" },
-  { href: "/make", label: "Customize" },
+  { href: "/discover", label: "Explore" },
+  { href: "/make", label: "Create" },
+  { href: "/remix", label: "Remix" },
   { href: "/shop", label: "Shop" },
-  { href: "/studio", label: "Studio" },
 ];
 
-export function Logo({ size = 32 }) {
+export function Logo({ size = 30 }) {
   // Three stacked print layers: the "layer" in LayerLab.
   return (
     <svg width={size} height={size} viewBox="0 0 40 40" aria-hidden="true" className="logo-mark">
-      <rect x="0" y="0" width="40" height="40" rx="11" fill="#16141c" />
-      <rect x="8" y="25" width="24" height="6" rx="3" fill="#ffffff" />
-      <rect x="10" y="17" width="20" height="6" rx="3" fill="#d4f84a" />
-      <rect x="13" y="9" width="14" height="6" rx="3" fill="#7a66ff" />
+      <rect x="0" y="0" width="40" height="40" rx="11" fill="#c6ff4a" />
+      <rect x="8" y="25" width="24" height="6" rx="3" fill="#0b0b0f" />
+      <rect x="10" y="17" width="20" height="6" rx="3" fill="#0b0b0f" opacity="0.7" />
+      <rect x="13" y="9" width="14" height="6" rx="3" fill="#0b0b0f" opacity="0.4" />
     </svg>
   );
 }
 
-export function Header({ active }) {
+export function Header({ active, search = true }) {
   const [open, setOpen] = useState(false);
+  const [q, setQ] = useState("");
   return (
     <header className="site-top">
       <a className="brand" href="/" aria-label={`${SITE.name} home`}>
         <Logo />
         <span>{SITE.name}</span>
       </a>
+      {search && (
+        <form className="top-search" action="/discover" role="search">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <circle cx="11" cy="11" r="7" fill="none" stroke="currentColor" strokeWidth="2" />
+            <path d="M16.5 16.5L21 21" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+          </svg>
+          <input name="q" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search models" aria-label="Search models" />
+        </form>
+      )}
       <button className="nav-toggle" aria-expanded={open} aria-label="Menu" onClick={() => setOpen(!open)}>
         <span />
         <span />
@@ -57,15 +67,16 @@ export function Footer() {
         <p>{SITE.tagline}</p>
       </div>
       <nav>
-        <a href="/discover">Discover</a>
+        <a href="/discover">Explore</a>
+        <a href="/make?kit=figure">Figure builder</a>
+        <a href="/make">Create</a>
         <a href="/remix">Remix a file</a>
-        <a href="/make">Customize</a>
         <a href="/shop">Shop</a>
         <a href="/studio">Studio</a>
       </nav>
       <p className="foot-note">
-        Prices are estimates while the shop is being set up. Models from other sites belong to their designers; we link to them and show
-        their licenses. A {SITE.parent} project.
+        Prices are estimates while the shop is being set up. Models from other sites belong to their designers; we show them with their
+        licenses. A {SITE.parent} project.
       </p>
     </footer>
   );

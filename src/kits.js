@@ -697,6 +697,41 @@ export function randomValues(kit, current) {
   return out;
 }
 
+// Every part belongs to a color region, so each feature can have its own
+// color. Kits list their regions here by part name; anything not listed is
+// "main", and raised letters are "words".
+const DECOR = { Star: "trim", Dot: "trim", "Heart point": "trim", "Heart left": "trim", "Heart right": "trim", "Border top": "trim", "Border bottom": "trim" };
+const REGION_MAPS = {
+  nameplate: { regions: [["main", "Sign"], ["words", "Letters"], ["trim", "Border & shapes"]], by: DECOR },
+  pumpkin: { regions: [["main", "Pumpkin"], ["stem", "Stem & leaf"]], by: { Stem: "stem", Leaf: "stem" } },
+  snowman: {
+    regions: [["main", "Snow"], ["hat", "Hat"], ["scarf", "Scarf"], ["nose", "Nose"], ["coal", "Buttons"], ["arms", "Arms"]],
+    by: { Brim: "hat", Crown: "hat", Beanie: "hat", "Beanie cuff": "hat", Pompom: "hat", Scarf: "scarf", "Scarf end": "scarf", Nose: "nose", Button: "coal", Arm: "arms" },
+  },
+  robot: {
+    regions: [["main", "Body"], ["face", "Face"], ["limbs", "Arms & legs"], ["antenna", "Antenna"], ["badge", "Badge"]],
+    by: { Eye: "face", Mouth: "face", Visor: "face", Pupil: "face", Dial: "face", "Dial needle": "face", Leg: "limbs", Foot: "limbs", Arm: "limbs", Shoulder: "limbs", Wheel: "limbs", "Axle box": "limbs", Antenna: "antenna", "Antenna ball": "antenna", Star: "badge", "Heart point": "badge", "Heart left": "badge", "Heart right": "badge" },
+  },
+  planter: { regions: [["main", "Pot"], ["saucer", "Saucer"]], by: { Saucer: "saucer", "Saucer rim": "saucer" } },
+  ornament: { regions: [["main", "Ornament"], ["words", "Letters"], ["trim", "Trunk & rim"]], by: { Trunk: "trim", Rim: "trim", Cap: "trim" } },
+  keychain: { regions: [["main", "Tag"], ["words", "Letters"]], by: {} },
+};
+
 export function buildKit(kit, values) {
-  return kit.build(cleanValues(kit, values));
+  const map = REGION_MAPS[kit.id]?.by || {};
+  return kit.build(cleanValues(kit, values)).map((p) => (p.region ? p : { ...p, region: map[p.name] || (p.name === "Words" && !p.hole ? "words" : "main") }));
+}
+
+export function kitRegions(kit) {
+  if (kit.regions) return kit.regions;
+  const map = REGION_MAPS[kit.id];
+  if (map) return map.regions.map(([id, label]) => ({ id, label }));
+  const list = [{ id: "main", label: kit.name }];
+  if (kit.options.some((o) => o.type === "text")) list.push({ id: "words", label: "Letters" });
+  return list;
+}
+
+// Starting colors: the kit's own, or one color for everything.
+export function defaultColors(kit, base) {
+  return Object.fromEntries(kitRegions(kit).map((r) => [r.id, kit.regions ? r.color : base]));
 }

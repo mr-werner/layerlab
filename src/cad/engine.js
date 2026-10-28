@@ -3,6 +3,7 @@
 import * as R from "replicad";
 import { buildShape, place, centered, textPieces } from "./shapes.js";
 import { readThreeMF } from "./threemf.js";
+import { writeThreeMF } from "./threemfWrite.js";
 
 const shapeCache = new Map(); // geometry key -> local solid
 const imports = new Map(); // import id -> { kind: "solid" | "mesh", shape }
@@ -233,11 +234,159 @@ function combineMesh(objects) {
   }
 }
 
+// Mesh buffers straight from a Manifold. replicad's mesh() takes seconds on a
+// 30k-triangle figure; this takes a few ms. Corners get smooth normals across
+// gentle bends and sharp ones across creases.
+const CREASE = Math.cos((38 * Math.PI) / 180);
+export function manifoldBuffers(man) {
+  const m = man.getMesh();
+  const np = m.numProp;
+  const vp = m.vertProperties;
+  const tv = m.triVerts;
+  const nt = tv.length / 3;
+  const nv = vp.length / np;
+  const fn = new Float32Array(nt * 3); // area-weighted face normals
+  const unit = new Float32Array(nt * 3);
+  for (let t = 0; t < nt; t++) {
+    const a = tv[3 * t] * np, b = tv[3 * t + 1] * np, c = tv[3 * t + 2] * np;
+    const ux = vp[b] - vp[a], uy = vp[b + 1] - vp[a + 1], uz = vp[b + 2] - vp[a + 2];
+    const wx = vp[c] - vp[a], wy = vp[c + 1] - vp[a + 1], wz = vp[c + 2] - vp[a + 2];
+    const x = uy * wz - uz * wy, y = uz * wx - ux * wz, z = ux * wy - uy * wx;
+    fn[3 * t] = x; fn[3 * t + 1] = y; fn[3 * t + 2] = z;
+    const l = Math.hypot(x, y, z) || 1;
+    unit[3 * t] = x / l; unit[3 * t + 1] = y / l; unit[3 * t + 2] = z / l;
+  }
+  // Which triangles touch each vertex (compressed lists).
+  const start = new Uint32Array(nv + 1);
+  for (let i = 0; i < tv.length; i++) start[tv[i] + 1]++;
+  for (let v = 0; v < nv; v++) start[v + 1] += start[v];
+  const fill = start.slice(0, nv);
+  const faces = new Uint32Array(tv.length);
+  for (let i = 0; i < tv.length; i++) faces[fill[tv[i]]++] = (i / 3) | 0;
+
+  const vertices = new Float32Array(nt * 9);
+  const normals = new Float32Array(nt * 9);
+  for (let t = 0; t < nt; t++) {
+    for (let k = 0; k < 3; k++) {
+      const v = tv[3 * t + k];
+      const o = 9 * t + 3 * k;
+      vertices[o] = vp[v * np]; vertices[o + 1] = vp[v * np + 1]; vertices[o + 2] = vp[v * np + 2];
+      let x = 0, y = 0, z = 0;
+      for (let j = start[v]; j < start[v + 1]; j++) {
+        const f = faces[j];
+        if (unit[3 * f] * unit[3 * t] + unit[3 * f + 1] * unit[3 * t + 1] + unit[3 * f + 2] * unit[3 * t + 2] < CREASE) continue;
+        x += fn[3 * f]; y += fn[3 * f + 1]; z += fn[3 * f + 2];
+      }
+      const l = Math.hypot(x, y, z) || 1;
+      normals[o] = x / l; normals[o + 1] = y / l; normals[o + 2] = z / l;
+    }
+  }
+  const triangles = new Uint32Array(nt * 3);
+  for (let i = 0; i < triangles.length; i++) triangles[i] = i;
+  return { vertices, normals, triangles };
+}
+
+// Builds each color region on its own: its solids joined, then every hole
+// cut out. Regions that didn't change are cached by the caller.
+export function previewGroups(groups, holes) {
+  const { Manifold } = R.getManifold();
+  const place = (list) => list.map((o) => placeMesh(localMesh(o), o));
+  let cutters = null;
+  if (holes.length) {
+    const placed = place(holes);
+    cutters = Manifold.union(placed);
+    cutters.numVert();
+    placed.forEach((p) => p.delete());
+  }
+  try {
+    return groups.map(({ key, objects }) => {
+      const placed = place(objects);
+      let body = Manifold.union(placed);
+      body.numVert();
+      placed.forEach((p) => p.delete());
+      if (cutters) {
+        const cut = body.subtract(cutters);
+        cut.numVert();
+        body.delete();
+        body = cut;
+      }
+      try {
+        return { key, ...manifoldBuffers(body) };
+      } finally {
+        body.delete();
+      }
+    });
+  } finally {
+    cutters?.delete();
+  }
+}
+
+// A multi-color .3mf: groups are given in priority order (details first), and
+// each one gives up the space the earlier ones already took, so no two color
+// parts overlap.
+export function exportColorThreeMF(groups, holes, title) {
+  const { Manifold } = R.getManifold();
+  const place = (list) => list.map((o) => placeMesh(localMesh(o), o));
+  const unite = (list) => {
+    const placed = place(list);
+    const u = Manifold.union(placed);
+    u.numVert();
+    placed.forEach((p) => p.delete());
+    return u;
+  };
+  let taken = holes.length ? unite(holes) : null;
+  const parts = [];
+  try {
+    for (const g of groups) {
+      if (!g.objects.length) continue;
+      let body = unite(g.objects);
+      if (taken) {
+        const cut = body.subtract(taken);
+        cut.numVert();
+        const grown = Manifold.union([taken, body]);
+        grown.numVert();
+        body.delete();
+        taken.delete();
+        taken = grown;
+        body = cut;
+      } else {
+        taken = body;
+        body = Manifold.union([body]);
+      }
+      if (body.numTri() > 0) {
+        const m = body.getMesh();
+        const np = m.numProp;
+        const vertices = new Float32Array((m.vertProperties.length / np) * 3);
+        for (let i = 0, j = 0; i < m.vertProperties.length; i += np, j += 3) vertices.set(m.vertProperties.subarray(i, i + 3), j);
+        parts.push({ name: g.name, color: g.color, vertices, triangles: m.triVerts });
+      }
+      body.delete();
+    }
+  } finally {
+    taken?.delete();
+  }
+  if (!parts.length) throw new Error("Nothing is left to print. Try different settings.");
+  return { bytes: writeThreeMF(parts, title).buffer };
+}
+
+// Gets the shapes ready ahead of time (OpenCascade meshing is the slow part),
+// so picking that option later is instant.
+export function warm(objects) {
+  for (const o of objects) {
+    try {
+      localMesh(o);
+    } catch {
+      /* the real build will report it */
+    }
+  }
+  return true;
+}
+
 export function previewMesh(objects) {
   const result = combineMesh(objects);
   try {
     if (result.wrapped.isEmpty?.()) throw new Error("Nothing is left to print. Try different settings.");
-    return { mesh: toBuffers(result.mesh()), volume: result.volume(), meshMode: true };
+    return { mesh: manifoldBuffers(result.wrapped), volume: result.volume(), meshMode: true };
   } finally {
     free(result);
   }

@@ -1,131 +1,117 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { Header, Footer } from "./Chrome.jsx";
-import { STORES, AISLES, FLAGS, LICENSES, storeLink, rememberTrip } from "../stores.js";
-import { SITE } from "../config.js";
+import { SearchBox, TopicChips, ModelGrid, ModelModal, useExplore } from "./Gallery.jsx";
+import { TOPICS } from "../gallery.js";
+import { STORES, FLAGS, LICENSES, storeLink, rememberTrip } from "../stores.js";
 import "./site.css";
+
+const SOURCES = [
+  { id: "all", label: "Everything" },
+  { id: "layerlab", label: "LayerLab" },
+  { id: "sketchfab", label: "Sketchfab" },
+];
 
 export default function Discover() {
   const start = new URLSearchParams(window.location.search).get("q") || "";
   const [q, setQ] = useState(start);
   const [term, setTerm] = useState(start);
-  const results = useRef(null);
+  const [topic, setTopic] = useState(TOPICS[0]);
+  const [source, setSource] = useState("all");
+  const [open, setOpen] = useState(null);
+  const explore = useExplore(term, term ? null : topic);
 
   useEffect(() => {
     window.history.replaceState(null, "", term ? `/discover?q=${encodeURIComponent(term)}` : "/discover");
   }, [term]);
 
-  const go = (t) => {
-    setQ(t);
-    setTerm(t.trim());
-    setTimeout(() => results.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 30);
-  };
+  const ours = source === "sketchfab" ? [] : explore.ours;
+  const live = source === "layerlab" ? [] : explore.live;
+  const label = term || (topic.id === "all" ? "" : topic.label);
+  const others = STORES.filter((s) => s.id !== "sketchfab");
 
   return (
     <div className="site">
-      <Header active="/discover" />
+      <Header active="/discover" search={false} />
 
-      <section className="mall-hero">
-        <p className="eyebrow">The model mall</p>
-        <h1>Find it anywhere. Finish it here.</h1>
-        <p className="lede">
-          Search the big 3D model sites in one go. Download the file you like, drop it into {SITE.name}, and change its color and size or
-          add a name stand before we print it.
-        </p>
-        <form
-          className="mall-search"
-          role="search"
-          onSubmit={(e) => {
-            e.preventDefault();
-            go(q);
-          }}
-        >
-          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Try “articulated dragon” or “headphone stand”" aria-label="What are you looking for?" />
-          <button className="btn primary">Search all stores</button>
-        </form>
-        <div className="aisles compact">
-          {AISLES.map((a) => (
-            <button key={a.q} className={`aisle t-${a.tone} ${term === a.q ? "on" : ""}`} onClick={() => go(a.q)}>
-              <small>{a.tag}</small>
-              <strong>{a.name}</strong>
-            </button>
-          ))}
+      <section className="gallery-head">
+        <h1>Explore</h1>
+        <SearchBox big value={q} onChange={setQ} onSubmit={(v) => setTerm(v.trim())} />
+        <div className="gallery-bar">
+          <TopicChips
+            topic={term ? { id: "" } : topic}
+            onPick={(t) => {
+              setTopic(t);
+              setTerm("");
+              setQ("");
+            }}
+          />
+          <div className="seg" role="tablist" aria-label="Source">
+            {SOURCES.map((s) => (
+              <button key={s.id} role="tab" aria-selected={source === s.id} className={source === s.id ? "on" : ""} onClick={() => setSource(s.id)}>
+                {s.label}
+              </button>
+            ))}
+          </div>
         </div>
       </section>
 
-      <section className="results" ref={results} id="stores">
-        <div className="results-head">
-          <h2 className="sec-title">{term ? `“${term}” in every store` : "Stores in the mall"}</h2>
-          <a className="btn dark" href="/remix">
-            Got a file? Remix it →
-          </a>
+      <section className="gallery">
+        <ModelGrid
+          ours={ours}
+          live={live}
+          state={source === "layerlab" ? "idle" : explore.state}
+          more={source === "layerlab" ? null : explore.more}
+          onOpen={setOpen}
+          empty="Nothing here yet. Try another word, or search the stores below."
+        />
+      </section>
+
+      <section className="elsewhere">
+        <div className="elsewhere-head">
+          <h2 className="sec-title">{label ? `“${label}” in other stores` : "More stores"}</h2>
+          <p>These stores don't let other sites show their models, so these open in a new tab. Download the file, then drop it in the remixer.</p>
         </div>
-        <div className="store-grid">
-          {STORES.map((s) => {
+        <div className="store-row">
+          {others.map((s) => {
             const f = FLAGS[s.flag];
-            const href = storeLink(s, term);
             return (
-              <a key={s.id} className="store" href={href} target="_blank" rel="noopener noreferrer" onClick={() => rememberTrip(s.id, term)}>
-                <div className="store-top">
-                  <i style={{ background: s.hue }}>{s.name[0]}</i>
-                  <div>
-                    <h3>{s.name}</h3>
-                    <small>by {s.by}</small>
-                  </div>
-                </div>
-                <p>{s.good}</p>
-                <div className={`lic-flag ${f.tone}`}>
-                  <strong>{f.label}</strong>
-                  <span>{f.note}</span>
-                </div>
-                <span className="store-go">
-                  {term && s.search ? `See “${term}” on ${s.name}` : `Browse ${s.name}`} ↗
+              <a key={s.id} className="store" href={storeLink(s, label)} target="_blank" rel="noopener noreferrer" onClick={() => rememberTrip(s.id, label)}>
+                <i style={{ background: s.hue }}>{s.name[0]}</i>
+                <span>
+                  <strong>{s.name}</strong>
+                  <small>{s.good}</small>
                 </span>
+                <em className={`lchip ${f.tone}`} title={f.note}>
+                  {f.label}
+                </em>
               </a>
             );
           })}
         </div>
-        <p className="fine">
-          These stores are run by other companies. Some need a free account to download, and accounts usually require age 13 or older.
-        </p>
-      </section>
-
-      <section className="bring-home">
-        <div className="bh-steps">
-          <div>
-            <span className="p-num">01</span>
-            <h3>Pick a model</h3>
-            <p>Open it on the store's page and check the license.</p>
-          </div>
-          <div>
-            <span className="p-num">02</span>
-            <h3>Download the file</h3>
-            <p>Grab the .stl or .3mf (or .step). One part works best.</p>
-          </div>
-          <div>
-            <span className="p-num">03</span>
-            <h3>Drop it here</h3>
-            <p>Recolor, resize, turn it, add a name stand. Then order it.</p>
-          </div>
-        </div>
-        <a className="btn lime big" href="/remix">
-          Open the remixer
+        <a className="btn" href="/remix">
+          Got a file? Remix it →
         </a>
       </section>
 
       <section className="licenses">
-        <h2 className="sec-title">Licenses, in plain words</h2>
-        <p>Every model page lists a license. Here's what the common ones mean for you, and for us printing it.</p>
-        <div className="lic-grid">
-          {LICENSES.filter((l) => l.id !== "unknown").map((l) => (
-            <div key={l.id} className={`lic ${l.tone}`}>
-              <strong>{l.tag}</strong>
-              <span>{l.name}</span>
-              <p>{l.ok}</p>
-            </div>
-          ))}
-        </div>
-        <p className="fine">This is a quick guide, not legal advice. The license on the model's own page is the one that counts.</p>
+        <details>
+          <summary>
+            <h2>Licenses, in plain words</h2>
+            <span>Every model shows one. Here's what they mean for you, and for us printing it.</span>
+          </summary>
+          <div className="lic-grid">
+            {LICENSES.filter((l) => l.id !== "unknown").map((l) => (
+              <div key={l.id} className={`lic ${l.tone}`}>
+                <strong>{l.tag}</strong>
+                <span>{l.name}</span>
+                <p>{l.ok}</p>
+              </div>
+            ))}
+          </div>
+          <p className="fine">A quick guide, not legal advice. The license on the model's own page is the one that counts.</p>
+        </details>
       </section>
+      <ModelModal item={open} onClose={() => setOpen(null)} />
       <Footer />
     </div>
   );

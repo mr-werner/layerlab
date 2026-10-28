@@ -56,6 +56,21 @@ export const FIGURE = {
     slider("scale", "Overall size", "Stand", 60, 160, 5, "%", 100, "100% is about 8 cm tall."),
   ],
   build: buildFigure,
+  regions: [
+    { id: "skin", label: "Skin", color: "#e9e7e1" },
+    { id: "face", label: "Eyes & cheeks", color: "#1b1c1e" },
+    { id: "hat", label: "Hat & hair", color: "#6c4bb4" },
+    { id: "body", label: "Outfit", color: "#6c4bb4" },
+    { id: "details", label: "Badge, belt & horns", color: "#f2c230" },
+    { id: "arms", label: "Sleeves", color: "#6c4bb4" },
+    { id: "legs", label: "Legs", color: "#1b1c1e" },
+    { id: "shoes", label: "Shoes", color: "#e9e7e1" },
+    { id: "item", label: "What it holds", color: "#f0742b" },
+    { id: "gear", label: "Back gear", color: "#1fa39a" },
+    { id: "tail", label: "Tail", color: "#e9e7e1" },
+    { id: "stand", label: "Stand", color: "#1b1c1e" },
+    { id: "name", label: "Name", color: "#e9e7e1" },
+  ],
 };
 
 function buildFigure(v) {
@@ -67,6 +82,13 @@ function buildFigure(v) {
   const lw = r1(Math.max(4, 6.5 * k)); // leg width
   const ll = r1(7 * k * (v.legLength / 100)); // leg length
   const parts = [];
+  // Each part gets a color region. `mark` tags everything added since the
+  // last call; `by` overrides the region for some part names.
+  let tagged = 0;
+  const mark = (region, by = {}) => {
+    for (let i = tagged; i < parts.length; i++) parts[i].region = by[parts[i].name] || region;
+    tagged = parts.length;
+  };
 
   // ---- stand ----
   const hasBase = v.base !== "none";
@@ -80,6 +102,7 @@ function buildFigure(v) {
     if (v.base === "hex") parts.push(o("polygon", { name: "Stand", params: { sides: 6, d: r1(baseD * 1.08), h: 3 }, rotation: [0, 0, 30] }));
     if (name) parts.push(text(name, v.font, nameSize, 1.2, [0, r1(-baseD * (v.base === "square" ? 0.28 : 0.33)), 2.8]));
   }
+  mark("stand", { Words: "name" });
   // The figure stands a little behind the middle so the name has room.
   const fy = hasBase && name ? r1(baseD * 0.06) : 0;
 
@@ -99,6 +122,8 @@ function buildFigure(v) {
     }
     parts.push(o("cylinder", { name: "Leg", params: { d: lw, h: r1(ll + footH) }, position: [x, fy, r1(z0 + 1)] }));
   }
+
+  mark("shoes", { Leg: "legs" });
 
   // ---- body ----
   const zb = r1(z0 + footH + ll - 1);
@@ -132,6 +157,7 @@ function buildFigure(v) {
     }
     parts.push(o("box", { name: "Buckle", params: { w: r1(lw * 0.9), d: 2, h: 3.4, radius: 0.6 }, position: [0, r1(fy + bodyFront - 0.6), r1(zbelt - 0.5)] }));
   }
+  mark("body", { Belt: "details", Buckle: "details" });
   // Chest badge, drawn flat then stood on the body front.
   const es = r1(Math.min(bw, bh) * 0.34);
   const chestZ = r1(zb + bh * 0.58);
@@ -146,6 +172,8 @@ function buildFigure(v) {
   }
   const frontAtChest = v.body === "hoodie" ? -(bw * 1.15 - (bw * 0.35 * 0.58)) / 2 : bodyFront;
   parts.push(...emblem.map((p) => standUp({ ...p, position: [p.position[0], p.position[1], p.position[2] - 0.4] }, r1(fy + frontAtChest), chestZ)));
+
+  mark("details");
 
   // ---- head ----
   const neckZ = zb + bh;
@@ -183,6 +211,8 @@ function buildFigure(v) {
   // A neck so the head is always joined to the body.
   parts.push(o("cylinder", { name: "Neck", params: { d: r1(Math.min(bw, H) * 0.45), h: r1(Math.max(3, headZ0 - neckZ + H * 0.3)) }, position: [0, fy, r1(neckZ - 1)] }));
   const fyAt = (x, z) => r1(fy + faceY(x, z));
+
+  mark("skin");
 
   // ---- face ----
   const eyeX = H * 0.19;
@@ -251,6 +281,8 @@ function buildFigure(v) {
     parts.push(o("sketch", { name: "Mouth", hole: true, params: { shapes: [shape], op: "extrude", height: 8 }, position: [0, r1(fyAt(0, mz) + depth), r1(mz)], rotation: [90, 0, 0] }));
   }
 
+  mark("face");
+
   // ---- ears, horns and the like ----
   const topY = fy;
   const earZ = v.head === "round" ? hc + H * 0.28 : headTop - H * 0.1;
@@ -272,6 +304,8 @@ function buildFigure(v) {
   } else if (v.ears === "unicorn") {
     parts.push(o("cone", { name: "Horn", params: { d1: r1(H * 0.15), d2: 0.8, h: r1(H * 0.45) }, position: [0, r1(topY - H * 0.15), r1(headTop - H * 0.14)], rotation: [22, 0, 0] }));
   }
+
+  mark("skin", { Horn: "details", Antenna: "details", "Antenna tip": "details" });
 
   // ---- hats and hair ----
   const crownZ = v.head === "round" ? hc + H * 0.3 : headTop - 1;
@@ -324,6 +358,8 @@ function buildFigure(v) {
       parts.push(o("cylinder", { name: "Ear cup", params: { d: r1(H * 0.38), h: 4, edge: 1, edgeStyle: "round" }, position: [r1(sx * (R - t / 2) - (sx > 0 ? 0 : 0)), topY, r1(bandZ)], rotation: [0, sx * 90, 0] }));
   }
 
+  mark("hat");
+
   // ---- arms and what they hold ----
   const shoulderZ = zb + bh * 0.82;
   const armL = r1(bh * 0.72 * (v.armLength / 100));
@@ -363,6 +399,8 @@ function buildFigure(v) {
     }
   }
 
+  mark("item", { Arm: "arms", Hand: "skin" });
+
   // ---- back ----
   const backY = fy - bodyFront; // body back surface (body is symmetric front to back)
   if (v.back === "backpack") {
@@ -385,6 +423,8 @@ function buildFigure(v) {
     parts.push(o("box", { name: "Cape", params: { w: r1(bw * 1.05), d: 1.8, h: capeH, radius: 0 }, position: [0, r1(backY + 0.6), r1(zb + bh - capeH)], rotation: [-6, 0, 0] }));
   }
 
+  mark("gear");
+
   // ---- tail ----
   const tailZ = zb + bh * 0.15;
   if (v.tail === "cat") {
@@ -397,15 +437,43 @@ function buildFigure(v) {
       parts.push(o("cone", { name: "Spike", params: { d1: r1(lw * 0.8), d2: 0.8, h: r1(lw * 0.9) }, position: [0, r1(backY - 1.5), r1(z)], rotation: [-90, 0, 0] }));
     }
   }
+  mark("tail");
   return parts;
 }
+
+// How each option's picture is shot: which regions to zoom on (`focus`,
+// with a smallest view size `min` in mm), which to paint in the accent
+// color (`hl`) and which way the figure faces (`angle`).
+export const FIGURE_ART = {
+  head: { focus: ["face"], min: 36, hl: ["skin"] },
+  ears: { focus: ["face"], min: 44, hl: ["skin", "details"], set: { hat: "none" } },
+  eyes: { focus: ["face"], min: 24, hl: ["face"] },
+  mouth: { focus: ["face"], min: 24, hl: ["face"] },
+  hat: { focus: ["hat", "face"], min: 40, hl: ["hat"], set: { ears: "none" } },
+  body: { focus: ["body"], min: 34, hl: ["body", "details"] },
+  emblem: { focus: ["body"], min: 30, hl: ["details"] },
+  pose: { hl: ["arms"] },
+  item: { focus: ["item"], min: 34, hl: ["item"] },
+  feet: { focus: ["shoes"], min: 26, hl: ["shoes"] },
+  tail: { angle: 140, hl: ["tail"], set: { back: "none" } },
+  back: { angle: 165, hl: ["gear"] },
+  base: { hl: ["stand", "name"] },
+};
 
 // Starter looks shown on the home page. Each opens in the figure builder.
 export const FIGURE_LOOKS = [
   { id: "nova", name: "Nova", color: "#6c4bb4", values: {} },
-  { id: "mochi", name: "Mochi", color: "#e86aa6", values: { ears: "cat", eyes: "big", hat: "none", body: "hoodie", pose: "wave", item: "coffee", tail: "cat", back: "backpack", emblem: "heart", name: "MOCHI" } },
-  { id: "sir-bolt", name: "Sir Bolt", color: "#8b8f94", values: { head: "square", ears: "horns", eyes: "visor", hat: "crown", body: "boxy", pose: "up", item: "sword", feet: "boots", back: "cape", belt: true, name: "SIR BOLT" } },
-  { id: "merlin", name: "Merlin", color: "#1fa39a", values: { head: "wide", ears: "none", eyes: "sleepy", hat: "wizard", body: "slim", pose: "wave", item: "wand", back: "wings", tail: "fox", base: "hex", name: "MERLIN" } },
-  { id: "unit-7", name: "Unit 7", color: "#1b1c1e", values: { head: "square", ears: "antenna", eyes: "cyclops", hat: "headphones", body: "boxy", pose: "down", item: "balloon", feet: "wheels", back: "jetpack", emblem: "bolt", name: "UNIT 7", font: "Space Mono" } },
-  { id: "sparkle", name: "Sparkle", color: "#f2c230", values: { ears: "unicorn", eyes: "big", mouth: "grin", cheeks: true, hat: "bun", body: "round", item: "heart", tail: "dino", base: "square", emblem: "star", name: "SPARKLE", font: "Courgette" } },
+  { id: "mochi", name: "Mochi", color: "#e86aa6", colors: { skin: "#e86aa6", body: "#8b8f94", arms: "#8b8f94", details: "#e86aa6", legs: "#8b8f94", item: "#e9e7e1", gear: "#1fa39a", tail: "#e86aa6", stand: "#e86aa6" }, values: { ears: "cat", eyes: "big", hat: "none", body: "hoodie", pose: "wave", item: "coffee", tail: "cat", back: "backpack", emblem: "heart", name: "MOCHI" } },
+  { id: "sir-bolt", name: "Sir Bolt", color: "#8b8f94", colors: { skin: "#8b8f94", hat: "#c9a033", body: "#8b8f94", details: "#c8362d", arms: "#8b8f94", shoes: "#1b1c1e", item: "#8b8f94", gear: "#c8362d", name: "#c9a033" }, values: { head: "square", ears: "horns", eyes: "visor", hat: "crown", body: "boxy", pose: "up", item: "sword", feet: "boots", back: "cape", belt: true, name: "SIR BOLT" } },
+  { id: "merlin", name: "Merlin", color: "#1fa39a", colors: { hat: "#2f5fb3", body: "#2f5fb3", arms: "#2f5fb3", gear: "#e9e7e1", item: "#c9a033", tail: "#f0742b", details: "#c9a033", name: "#c9a033" }, values: { head: "wide", ears: "none", eyes: "sleepy", hat: "wizard", body: "slim", pose: "wave", item: "wand", back: "wings", tail: "fox", base: "hex", name: "MERLIN" } },
+  { id: "unit-7", name: "Unit 7", color: "#1b1c1e", colors: { skin: "#8b8f94", face: "#1fa39a", hat: "#1b1c1e", body: "#8b8f94", arms: "#8b8f94", shoes: "#1b1c1e", item: "#c8362d", gear: "#1b1c1e", name: "#f2c230" }, values: { head: "square", ears: "antenna", eyes: "cyclops", hat: "headphones", body: "boxy", pose: "down", item: "balloon", feet: "wheels", back: "jetpack", emblem: "bolt", name: "UNIT 7", font: "Space Mono" } },
+  { id: "sparkle", name: "Sparkle", color: "#f2c230", colors: { details: "#c9a033", hat: "#e86aa6", body: "#f2c230", arms: "#f2c230", item: "#c8362d", tail: "#6c4bb4", shoes: "#e86aa6", stand: "#6c4bb4" }, values: { ears: "unicorn", eyes: "big", mouth: "grin", cheeks: true, hat: "bun", body: "round", item: "heart", tail: "dino", base: "square", emblem: "star", name: "SPARKLE", font: "Courgette" } },
 ];
+
+// A link that opens a starter look in the figure builder.
+export function lookUrl(look, extra = "") {
+  const cs = Object.entries(look.colors || {})
+    .map(([r, c]) => `${r}.${c.slice(1)}`)
+    .join(",");
+  return `/make?kit=figure&v=${encodeURIComponent(JSON.stringify(look.values))}&cs=${cs}${extra}`;
+}

@@ -33,6 +33,31 @@ for (const kit of KITS) {
   for (const op of kit.options) if (op.type === "slider") for (const val of [op.min, op.max]) run(kit, { ...d, [op.id]: val }, `${op.id}=${val}`);
   for (let i = 0; i < randoms; i++) run(kit, randomValues(kit, d), `random${i}`);
 }
+// Color regions: every region builds on its own, and the multi-color .3mf
+// reads back with one mesh per color.
+if (!only || only === "colors") {
+  const { buildKit, kitRegions, defaultColors } = await import("../src/kits.js");
+  const { readThreeMF } = await import("../src/cad/threemf.js");
+  for (const kit of KITS) {
+    const parts = buildKit(kit, defaultValues(kit));
+    const holes = parts.filter((p) => p.hole);
+    const regions = kitRegions(kit);
+    const colors = defaultColors(kit, "#f0742b");
+    const groups = regions.map((r) => ({ key: r.id, name: r.label, color: colors[r.id], objects: parts.filter((p) => !p.hole && p.region === r.id) })).filter((g) => g.objects.length);
+    try {
+      const t0 = Date.now();
+      const meshes = E.previewGroups(groups, holes);
+      const { bytes } = E.exportColorThreeMF([...groups].reverse(), holes, kit.name);
+      const stl = readThreeMF(bytes);
+      if (!stl.byteLength) throw new Error("empty 3mf");
+      console.log(kit.id, "colors", meshes.length, "regions", Date.now() - t0, "ms", "3mf", bytes.byteLength, "bytes");
+    } catch (e) {
+      fails++;
+      console.log("FAIL", kit.id, "colors", e.message);
+    }
+  }
+}
+
 // The remixer, on the sample file: every side down, both stands, a script name.
 if (!only || only === "remix") {
   const { remixParts, remixDefaults, DOWN } = await import("../src/remix.js");

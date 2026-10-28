@@ -36,6 +36,12 @@ export const REMIX_OPTIONS = [
   { id: "font", label: "Letter style", group: "Stand", type: "choice", choices: FONT_CHOICES, default: "Archivo Black", edit: true },
 ];
 
+export const REMIX_REGIONS = [
+  { id: "model", label: "Model" },
+  { id: "stand", label: "Stand" },
+  { id: "name", label: "Name" },
+];
+
 export const remixDefaults = () => Object.fromEntries(REMIX_OPTIONS.map((op) => [op.id, op.default]));
 
 const rad = (d) => (d * Math.PI) / 180;
@@ -98,5 +104,5 @@ export function remixParts(file, v, { allowEdits = true } = {}) {
     })
   );
   if (v.mirror) parts[0].mirror = true;
-  return parts;
+  return parts.map((p, i) => ({ ...p, region: i === 0 ? "model" : p.name === "Words" ? "name" : "stand" }));
 }

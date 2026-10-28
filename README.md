@@ -42,6 +42,10 @@ Built on the ProtoLab CAD engine (replicad/OpenCascade + Manifold, in a web work
 - The license summaries on the mall page (they describe each site in general; each model's own license is what counts).
 - The store search links (`src/stores.js`) follow each site's current search URL. They couldn't be tested from the build machine (the sites block scripted requests), so click through each once.
 
+## AI models (Meshy)
+
+`api/meshy.js` is a Vercel function that calls Meshy's text-to-3D API. Set `MESHY_API_KEY` (and optionally `MESHY_DAILY_LIMIT`, default 25) in the Vercel project's environment variables. Without the key the "Describe it" box on /remix stays hidden. Prompts go through the same family filter as Sketchfab results, and Meshy's own moderation is on.
+
 ## Develop
 
 ```bash
