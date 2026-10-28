@@ -9,12 +9,13 @@ const NAV = [
 ];
 
 export function Logo({ size = 34 }) {
-  // A little anvil with a spark: the "forge" in the name.
+  // Three stacked print layers: the "layer" in LayerLab.
   return (
     <svg width={size} height={size} viewBox="0 0 40 40" aria-hidden="true" className="logo-mark">
       <rect x="1" y="1" width="38" height="38" rx="12" fill="var(--grape)" />
-      <path d="M9 15h18c2.5 0 4.5-1.5 5-3.5l1 0c0 4-2.8 7.5-7 8.3V23h-3l2 6H15l2-6h-3v-4H9z" fill="#fff8ef" />
-      <path d="M30 5l1.2 3 3 1.2-3 1.2L30 13.4l-1.2-3-3-1.2 3-1.2z" fill="var(--sun)" />
+      <rect x="9" y="25" width="22" height="6" rx="3" fill="#fff8ef" />
+      <rect x="11" y="17" width="18" height="6" rx="3" fill="var(--sun)" />
+      <rect x="14" y="9" width="12" height="6" rx="3" fill="var(--tangerine)" />
     </svg>
   );
 }

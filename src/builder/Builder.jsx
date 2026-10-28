@@ -12,8 +12,8 @@ import { BUILD_VOLUME, COLORS, MIN_FEATURE_MM, SITE, estimatePrice } from "../co
 import { ShapeIcon } from "./icons.jsx";
 import "./builder.css";
 
-const STORAGE_KEY = "trinketforge:studio:v1";
-const PREFS_KEY = "trinketforge:prefs:v1";
+const STORAGE_KEY = "layerlab:studio:v1";
+const PREFS_KEY = "layerlab:prefs:v1";
 
 function loadPrefs() {
   try {
@@ -502,15 +502,15 @@ export default function Builder() {
       const i = importsRef.current.get(o.params.importId);
       if (i) imports[o.params.importId] = { name: i.name, data: toBase64(i.bytes) };
     }
-    const data = JSON.stringify({ app: "TrinketForge", version: 1, name, color, objects: plainObjects(), imports });
-    download(`${slug(name)}.trinket.json`, data, "application/json");
+    const data = JSON.stringify({ app: "LayerLab", version: 1, name, color, objects: plainObjects(), imports });
+    download(`${slug(name)}.layerlab.json`, data, "application/json");
   };
 
   const openProject = async (file) => {
     try {
       const data = JSON.parse(await file.text());
       // ProtoLab files use the same format, so they open here too.
-      if (!["TrinketForge", "ProtoLab"].includes(data.app) || !Array.isArray(data.objects)) throw new Error("That isn't a saved design file.");
+      if (!["LayerLab", "TrinketForge", "ProtoLab"].includes(data.app) || !Array.isArray(data.objects)) throw new Error("That isn't a saved design file.");
       setBusy("Opening design…");
       for (const [id, imp] of Object.entries(data.imports || {})) {
         const bytes = fromBase64(imp.data);
@@ -621,7 +621,7 @@ export default function Builder() {
                 <hr />
                 <button role="menuitem" onClick={saveProject}>
                   <strong>Save design</strong>
-                  <span>A .trinket.json file you can open later</span>
+                  <span>A .layerlab.json file you can open later</span>
                 </button>
                 <button
                   role="menuitem"
@@ -631,7 +631,7 @@ export default function Builder() {
                   }}
                 >
                   <strong>Open design</strong>
-                  <span>Load a .trinket.json file</span>
+                  <span>Load a .layerlab.json file</span>
                 </button>
               </div>
             )}

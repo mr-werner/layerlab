@@ -15,7 +15,7 @@ export default function Landing() {
 
       <section className="hero">
         <div className="hero-copy">
-          <p className="eyebrow">3D printed. Made by you.</p>
+          <p className="eyebrow">{SITE.tagline}</p>
           <h1>
             Dream it up. <span className="hl">Slide it, spin it,</span> make it yours.
           </h1>

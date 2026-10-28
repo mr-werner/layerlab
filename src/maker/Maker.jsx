@@ -7,7 +7,7 @@ import { cad } from "../cad/client.js";
 import { BUILD_VOLUME, COLORS, SITE, estimatePrice } from "../config.js";
 import "./maker.css";
 
-const STUDIO_KEY = "trinketforge:studio:v1";
+const STUDIO_KEY = "layerlab:studio:v1";
 
 function readStart() {
   const q = new URLSearchParams(window.location.search);

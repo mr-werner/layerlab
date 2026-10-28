@@ -1,7 +1,6 @@
-// Placeholder name until the owner picks one (see .notes/open-items.md).
 export const SITE = {
-  name: "Trinket Forge",
-  tagline: "Make it yours. We'll print it.",
+  name: "LayerLab",
+  tagline: "Discover it. Customize it. Print it.",
   parent: "Blueprint WebStudio",
 };
 

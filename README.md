@@ -1,4 +1,6 @@
-# Trinket Forge (placeholder name)
+# LayerLab
+
+**Discover it. Customize it. Print it.**
 
 A novelty 3D print shop for kids and grown-ups. People pick a ready-made base (a robot, a pumpkin, a keychain…), change it with big sliders and buttons like a video game character creator, and order the print or save the 3D file.
 
@@ -25,14 +27,12 @@ Built on the ProtoLab CAD engine (replicad/OpenCascade + Manifold, in a web work
 
 | Setting | Placeholder |
 |---|---|
-| Name | Trinket Forge |
 | Build volume | 256 × 256 × 256 mm (same as ProtoLab) |
 | Price | ProtoLab's formula on the bounding box, labelled "Placeholder price" |
 | Ordering | "Order this print" shows the estimate and saves the file; no checkout yet |
 
 ## Owner should confirm
 
-- The name (and the subdomain to match).
 - Printer, pricing, and how orders work (same open questions as ProtoLab).
 - Whether to print non-commercial (CC BY-NC) models from other sites as paid orders. The community page currently says "We check with you before printing it as an order."
 - The license summaries on the community page (they describe each site in general; each model's own license is what counts).
