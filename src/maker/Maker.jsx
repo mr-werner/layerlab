@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Preview from "./Preview.jsx";
+import ViewControls from "./ViewControls.jsx";
 import { Control, RegionColors } from "./Controls.jsx";
 import { useBuild, colorGroups, inches, download } from "./useBuild.js";
 import { Header } from "../site/Chrome.jsx";
@@ -72,6 +73,8 @@ export default function Maker() {
   const [part, setPart] = useState(null); // the part whose color is open
   const [picked, setPicked] = useState(null); // { region } flashes in the preview
   const [spin, setSpin] = useState(true);
+  const [viewMode, setViewMode] = useState("turn");
+  const [compare, setCompare] = useState("none");
   const [panel, setPanel] = useState(null); // order | null
   const [toast, setToast] = useState("");
   const previewRef = useRef(null);
@@ -260,7 +263,7 @@ export default function Maker() {
     );
   }
 
-  const options = kit.options.filter((o) => o.group === tab);
+  const options = kit.options.filter((o) => o.group === tab && (!o.when || o.when(values)));
   const tabRegions = regions.filter((r) => (r.tab || groups[0]) === tab);
   const paint = (c) => {
     remember();
@@ -315,6 +318,8 @@ export default function Maker() {
               onSpinStop={() => setSpin(false)}
               onPick={regions.length > 1 ? pickPart : null}
               selected={picked}
+              compare={compare}
+              mode={viewMode}
             />
             {status === "warming" && (
               <div className="mk-loading">
@@ -325,16 +330,18 @@ export default function Maker() {
             )}
             {status === "building" && <div className="mk-chip building">Shaping…</div>}
             {status === "error" && <div className="mk-chip bad">{error}</div>}
-            <div className="mk-view-tools">
-              <button onClick={() => setSpin(!spin)} aria-pressed={spin}>
-                {spin ? "Stop spinning" : "Spin"}
-              </button>
-              <button onClick={() => previewRef.current?.reframe()}>Recenter</button>
-            </div>
+            <ViewControls
+              view={previewRef}
+              spin={spin}
+              setSpin={setSpin}
+              mode={viewMode}
+              setMode={setViewMode}
+              compare={compare}
+              setCompare={setCompare}
+            />
             <p className="mk-drag-hint">
-              {regions.length > 1
-                ? "Tap a part to change it. Drag to turn, pinch or scroll to zoom."
-                : "Drag to turn it. Pinch or scroll to zoom."}
+              {regions.length > 1 ? "Tap a part to change it. " : ""}
+              {viewMode === "move" ? "Drag to move." : "Drag to turn."} Pinch or scroll to zoom.
             </p>
           </div>
           <div className="mk-facts">

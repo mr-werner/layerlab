@@ -9,7 +9,7 @@ import { LICENSE_BY_ID, rememberTrip } from "../stores.js";
 
 // Our items first, then live results from every source; "more" loads the
 // next page from each source that has one.
-export function useExplore(q, topic) {
+export function useExplore(q, topic, { printOnly = true } = {}) {
   const [bySource, setBySource] = useState({}); // id -> { items, next, state }
   const [sources, setSources] = useState(["sketchfab", "smithsonian"]);
   const query = (q || topic?.q || "").trim();
@@ -24,18 +24,18 @@ export function useExplore(q, topic) {
     const ctl = new AbortController();
     setBySource(Object.fromEntries(sources.map((id) => [id, { items: [], next: null, state: "loading" }])));
     for (const id of sources) {
-      searchSource(id, query, { signal: ctl.signal })
+      searchSource(id, query, { signal: ctl.signal, printOnly })
         .then((r) => setBySource((b) => ({ ...b, [id]: { items: r.items, next: r.next, state: "idle" } })))
         .catch((e) => e.name !== "AbortError" && setBySource((b) => ({ ...b, [id]: { items: [], next: null, state: "error" } })));
     }
     return () => ctl.abort();
-  }, [query, sources]);
+  }, [query, sources, printOnly]);
   const ours = useMemo(() => ourMatches(q, topic), [q, topic]);
   const more = async (only) => {
     const ids = sources.filter((id) => bySource[id]?.next && (!only || only === id));
     for (const id of ids) {
       setBySource((b) => ({ ...b, [id]: { ...b[id], state: "loading" } }));
-      searchSource(id, query, { next: bySource[id].next })
+      searchSource(id, query, { next: bySource[id].next, printOnly })
         .then((r) => setBySource((b) => ({ ...b, [id]: { items: [...b[id].items, ...r.items], next: r.next, state: "idle" } })))
         .catch(() => setBySource((b) => ({ ...b, [id]: { ...b[id], next: null, state: "idle" } })));
     }
@@ -175,7 +175,7 @@ export function ModelModal({ item, onClose }) {
   const ours = item.source === "layerlab";
   const info = SOURCE_INFO[item.source] || { name: item.source };
   const credit = { license: item.license, designer: item.by, link: item.url, title: item.title };
-  const direct = item.source === "smithsonian" && !!item.download;
+  const direct = !!item.download;
   const sfReady = item.source === "sketchfab" && !!cfg.sketchfabClientId;
   const openHere = () => {
     rememberTrip(item.source, "", credit);

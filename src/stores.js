@@ -109,6 +109,16 @@ export const STORES = [
     hue: "#3c4a5c",
   },
   {
+    id: "polypizza",
+    name: "Poly Pizza",
+    by: "Poly Pizza",
+    url: "https://poly.pizza/",
+    search: (q) => `https://poly.pizza/search/${encodeURIComponent(q)}`,
+    flag: "cc0",
+    good: "Cute low-poly models, free (CC0 or CC BY)",
+    hue: "#e8508f",
+  },
+  {
     id: "nasa",
     name: "NASA 3D",
     by: "NASA",

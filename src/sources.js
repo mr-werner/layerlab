@@ -9,6 +9,7 @@ export const SOURCE_INFO = {
   sketchfab: { name: "Sketchfab" },
   smithsonian: { name: "Smithsonian", note: "Museum scans, public domain" },
   thingiverse: { name: "Thingiverse" },
+  polypizza: { name: "Poly Pizza", note: "Free low-poly models" },
   myminifactory: { name: "MyMiniFactory" },
 };
 
@@ -22,8 +23,19 @@ export function liveSources() {
   return list;
 }
 
-export async function searchSource(id, q, { next, signal } = {}) {
-  if (id === "sketchfab") return searchSketchfab(q, { next, signal });
+// Free model files that can be downloaded straight into the builder.
+const DIRECT = { "3d-api.si.edu": "the Smithsonian", "static.poly.pizza": "Poly Pizza" };
+export function directSource(url) {
+  try {
+    const u = new URL(url);
+    return u.protocol === "https:" && /\.glb$/i.test(u.pathname) ? DIRECT[u.hostname] || null : null;
+  } catch {
+    return null;
+  }
+}
+
+export async function searchSource(id, q, { next, signal, printOnly = true } = {}) {
+  if (id === "sketchfab") return searchSketchfab(q, { next, signal, printOnly });
   if (id === "smithsonian") return searchSmithsonian(q, { next: next || 0, signal });
   const res = await fetch(`/api/search?${new URLSearchParams({ source: id, q: q || "", page: String(next || 1) })}`, { signal });
   if (!res.ok) throw new Error(`${SOURCE_INFO[id]?.name || id} search failed`);

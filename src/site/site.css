@@ -1052,3 +1052,48 @@
   max-height: 100%;
   object-fit: contain;
 }
+
+/* Home: upload next to the search, results right under it */
+.hero-upload {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 18px;
+  color: var(--ink-2);
+  font-size: 16px;
+}
+.hero-upload .btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.hero-upload svg {
+  width: 18px;
+  height: 18px;
+}
+.hero + .explore {
+  padding-top: 28px;
+}
+.src.polypizza {
+  color: #ff9ad5;
+}
+.print-only {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 14px;
+  font-size: 14px;
+  color: var(--ink-2);
+  cursor: pointer;
+}
+.print-only input {
+  accent-color: var(--accent);
+  transform: translateY(2px);
+}
+.print-only small {
+  color: var(--muted);
+  font-size: 12px;
+}

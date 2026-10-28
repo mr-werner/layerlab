@@ -394,11 +394,34 @@ export function warm(objects) {
   return true;
 }
 
+// How many separate pieces a model prints as (1 = everything is joined).
+// Slivers under 1 mm³ (left where faces meet) don't count.
+function countPieces(man) {
+  const list = man.decompose();
+  const n = list.filter((m) => m.volume() > 1).length;
+  list.forEach((m) => m.delete?.());
+  return n;
+}
+
+// For tests: the bounding box of each separate piece.
+export function pieceBoxes(objects) {
+  const result = combineMesh(objects);
+  try {
+    return result.wrapped.decompose().map((m) => {
+      const b = m.boundingBox();
+      m.delete?.();
+      return { min: [...b.min], max: [...b.max] };
+    });
+  } finally {
+    free(result);
+  }
+}
+
 export function previewMesh(objects) {
   const result = combineMesh(objects);
   try {
     if (result.wrapped.isEmpty?.()) throw new Error("Nothing is left to print. Try different settings.");
-    return { mesh: manifoldBuffers(result.wrapped), volume: result.volume(), meshMode: true };
+    return { mesh: manifoldBuffers(result.wrapped), volume: result.volume(), meshMode: true, pieces: countPieces(result.wrapped) };
   } finally {
     free(result);
   }

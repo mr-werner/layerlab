@@ -36,7 +36,11 @@ export default function AiMake({ onModel }) {
     e.preventDefault();
     setErr("");
     try {
-      const r = await fetch("/api/meshy", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ prompt }) });
+      const r = await fetch("/api/meshy", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ prompt }),
+      });
       const d = await r.json();
       if (!r.ok) throw new Error(d.error);
       setJob({ id: d.id, progress: 0 });
@@ -44,7 +48,12 @@ export default function AiMake({ onModel }) {
       if (!alive.current) return;
       const file = await fetch(`/api/meshy?id=${d.id}&file=1`);
       if (!file.ok) throw new Error("Couldn't download the model.");
-      const slug = prompt.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 40) || "ai-model";
+      const slug =
+        prompt
+          .toLowerCase()
+          .replace(/[^a-z0-9]+/g, "-")
+          .replace(/^-|-$/g, "")
+          .slice(0, 40) || "ai-model";
       await onModel(`${slug}.glb`, await file.arrayBuffer(), prompt);
       setJob(null);
     } catch (e2) {
@@ -71,7 +80,13 @@ export default function AiMake({ onModel }) {
       ) : (
         <>
           <div className="ai-row">
-            <input value={prompt} onChange={(e) => setPrompt(e.target.value)} maxLength={200} placeholder={`Try "${IDEAS[0]}"`} aria-label="Describe a model" />
+            <input
+              value={prompt}
+              onChange={(e) => setPrompt(e.target.value)}
+              maxLength={200}
+              placeholder={`Try "${IDEAS[0]}"`}
+              aria-label="Describe a model"
+            />
             <button className="btn primary" disabled={prompt.trim().length < 3}>
               Make it
             </button>

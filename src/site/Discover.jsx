@@ -13,7 +13,8 @@ export default function Discover() {
   const [topic, setTopic] = useState(TOPICS[0]);
   const [source, setSource] = useState("all");
   const [open, setOpen] = useState(null);
-  const explore = useExplore(term, term ? null : topic);
+  const [printOnly, setPrintOnly] = useState(true);
+  const explore = useExplore(term, term ? null : topic, { printOnly });
 
   useEffect(() => {
     window.history.replaceState(null, "", term ? `/discover?q=${encodeURIComponent(term)}` : "/discover");
@@ -59,6 +60,10 @@ export default function Discover() {
             ))}
           </div>
         </div>
+        <label className="print-only">
+          <input type="checkbox" checked={printOnly} onChange={(e) => setPrintOnly(e.target.checked)} />
+          Made for 3D printing only <small>Turn off to see every downloadable Sketchfab model (many more, but some need cleanup to print).</small>
+        </label>
       </section>
 
       <section className="gallery">

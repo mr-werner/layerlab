@@ -6,6 +6,45 @@ import ART from "../optionArt.json";
 
 const colorName = (v) => COLORS.find((c) => c.value === v)?.label || "Custom";
 
+// Shown light to dark within each color family.
+const ORDER = [
+  "Black",
+  "Charcoal",
+  "Gray",
+  "Silver",
+  "White",
+  "Ivory",
+  "Maroon",
+  "Red",
+  "Coral",
+  "Magenta",
+  "Pink",
+  "Blush",
+  "Terracotta",
+  "Orange",
+  "Peach",
+  "Brown",
+  "Bronze",
+  "Tan",
+  "Gold",
+  "Yellow",
+  "Lemon",
+  "Olive",
+  "Lime",
+  "Green",
+  "Forest",
+  "Mint",
+  "Teal",
+  "Cyan",
+  "Sky",
+  "Blue",
+  "Navy",
+  "Grape",
+  "Purple",
+  "Lavender",
+];
+const PALETTE = [...COLORS].sort((a, b) => (ORDER.indexOf(a.label) + 1 || 99) - (ORDER.indexOf(b.label) + 1 || 99));
+
 export function Swatches({ color, onPick, label = "Color" }) {
   return (
     <div className="mk-field">
@@ -13,7 +52,7 @@ export function Swatches({ color, onPick, label = "Color" }) {
         {label} <em>{colorName(color)}</em>
       </span>
       <div className="mk-swatches">
-        {COLORS.map((c) => (
+        {PALETTE.map((c) => (
           <button
             key={c.value}
             className={c.value === color ? "on" : ""}

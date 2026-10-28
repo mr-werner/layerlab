@@ -50,8 +50,15 @@ Built on the ProtoLab CAD engine (replicad/OpenCascade + Manifold, in a web work
 
 - Sketchfab and the Smithsonian (CC0 museum scans) are searched from the browser. Smithsonian models open straight in the upload page.
 - "Sign in with Sketchfab" lets Sketchfab models load straight into the builder. Register an app at Sketchfab (implicit grant, redirect URI `https://layerlab.blueprintwebstudio.com/auth/sketchfab`), then set `SKETCHFAB_CLIENT_ID` in Vercel. Until then the button stays hidden.
-- Thingiverse and MyMiniFactory show in Explore once `THINGIVERSE_TOKEN` or `MYMINIFACTORY_KEY` is set (searched through `api/search.js` so the keys stay private).
+- Thingiverse, MyMiniFactory and Poly Pizza (CC0/CC BY low-poly models that open straight in the builder) show in Explore once `THINGIVERSE_TOKEN`, `MYMINIFACTORY_KEY` or `POLY_PIZZA_KEY` is set (searched through `api/search.js` so the keys stay private).
+- "Made for 3D printing only" on /discover narrows Sketchfab to models tagged for printing.
 - Models that aren't watertight get repaired on import (`src/cad/repair.js`): weld first, then rebuild as a solid if needed.
+
+## Builder view
+
+- `src/maker/ViewControls.jsx`: buttons to turn, tilt, zoom and move the view (hold to repeat), a Turn/Move switch for one-finger or left-button drags, Recenter, Spin, and a "?" card.
+- `src/maker/compare.js`: the Size check menu stands a tape measure, ruler, yardstick, banana, apple, phone, soda can, credit card, quarter or pencil (real sizes) next to the model, or draws its dimensions.
+- Every figure feature has a size slider. `npm test` runs `scripts/test-pieces.mjs`, which builds every choice at 50, 100 and 180% plus random mixes and fails if any figure comes out in more than one piece.
 
 ## Develop
 

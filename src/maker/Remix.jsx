@@ -2,6 +2,7 @@
 // recolor it and add a name stand before ordering a print.
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Preview from "./Preview.jsx";
+import ViewControls from "./ViewControls.jsx";
 import { Control, RegionColors } from "./Controls.jsx";
 import { useBuild, colorGroups, inches, download } from "./useBuild.js";
 import { saveRemix, loadRemix, clearRemix } from "./fileStore.js";
@@ -50,6 +51,8 @@ export default function Remix() {
   const [part, setPart] = useState(undefined);
   const [picked, setPicked] = useState(null);
   const [spin, setSpin] = useState(true);
+  const [viewMode, setViewMode] = useState("turn");
+  const [compare, setCompare] = useState("none");
   const [over, setOver] = useState(false);
   const [panel, setPanel] = useState(null);
   const [toast, setToast] = useState("");
@@ -107,7 +110,7 @@ export default function Remix() {
     }
   }, []);
 
-  // A model picked in the gallery (?sf= Sketchfab, ?si= Smithsonian) loads
+  // A model picked in the gallery (?sf= Sketchfab, ?si= a free file link) loads
   // straight in; otherwise pick up where the last visit left off.
   const [signIn, setSignIn] = useState(null);
   useEffect(() => {
@@ -135,9 +138,10 @@ export default function Remix() {
           const { downloadSketchfab } = await import("../sketchfabAuth.js");
           got = await downloadSketchfab(sf, setLoading);
         } else {
-          const { isSmithsonianFile } = await import("../smithsonian.js");
-          if (!isSmithsonianFile(si)) throw new Error("That link isn't a Smithsonian model.");
-          setLoading("Downloading from the Smithsonian…");
+          const { directSource } = await import("../sources.js");
+          const from = directSource(si);
+          if (!from) throw new Error("That link isn't from a store we can load directly.");
+          setLoading(`Downloading from ${from}…`);
           const r = await fetch(si);
           if (!r.ok) throw new Error("The download didn't finish.");
           got = { name: decodeURIComponent(si.split("/").pop()), bytes: await r.arrayBuffer() };
@@ -300,6 +304,8 @@ export default function Remix() {
                   onSpinStop={() => setSpin(false)}
                   onPick={regions.length > 1 ? pickPart : null}
                   selected={picked}
+                  compare={compare}
+                  mode={viewMode}
                 />
                 {status === "warming" && (
                   <div className="mk-loading">
@@ -309,13 +315,18 @@ export default function Remix() {
                 )}
                 {status === "building" && <div className="mk-chip building">Updating…</div>}
                 {status === "error" && <div className="mk-chip bad">{error}</div>}
-                <div className="mk-view-tools">
-                  <button onClick={() => setSpin(!spin)} aria-pressed={spin}>
-                    {spin ? "Stop spinning" : "Spin"}
-                  </button>
-                  <button onClick={() => previewRef.current?.reframe()}>Recenter</button>
-                </div>
-                <p className="mk-drag-hint">Drag to turn it. Drop another file to swap.</p>
+                <ViewControls
+                  view={previewRef}
+                  spin={spin}
+                  setSpin={setSpin}
+                  mode={viewMode}
+                  setMode={setViewMode}
+                  compare={compare}
+                  setCompare={setCompare}
+                />
+                <p className="mk-drag-hint">
+                  {viewMode === "move" ? "Drag to move." : "Drag to turn."} Pinch or scroll to zoom. Drop another file to swap.
+                </p>
               </>
             ) : (
               <div className={`rx-drop ${over ? "over" : ""}`}>

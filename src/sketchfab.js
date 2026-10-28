@@ -51,13 +51,14 @@ function toItem(r) {
 }
 
 // Returns { items, next } where next is a cursor URL for "show more".
-export async function searchSketchfab(q, { next, signal, count = 24 } = {}) {
+// `printOnly` keeps to models their designers tagged for 3D printing.
+export async function searchSketchfab(q, { next, signal, count = 24, printOnly = true } = {}) {
   const url =
     next ||
     `${API}?${new URLSearchParams({
       type: "models",
       q: q || "",
-      tags: "3dprint",
+      ...(printOnly ? { tags: "3dprint" } : {}),
       downloadable: "true",
       count: String(count),
       ...(q ? {} : { sort_by: "-likeCount" }),

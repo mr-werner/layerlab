@@ -2,6 +2,7 @@
 // Each one switches on when its env var is set in Vercel:
 //   THINGIVERSE_TOKEN   (an app token from thingiverse.com/developers)
 //   MYMINIFACTORY_KEY   (an API key from myminifactory.com/settings/developer)
+//   POLY_PIZZA_KEY      (a free key from poly.pizza/settings/api)
 //   GET /api/search                     -> { sources: ["thingiverse", ...] }
 //   GET /api/search?source=..&q=..&page=1 -> { items, next }
 import { ADULT, licenseId } from "../src/sketchfab.js";
@@ -34,6 +35,31 @@ const SOURCES = {
           url: t.public_url || `https://www.thingiverse.com/thing:${t.id}`,
           licenseLabel: t.license || "See the model page",
           license: t.license ? licenseId(t.license) : "unknown",
+        })),
+        next: (data.total || 0) > page * PER ? page + 1 : null,
+      };
+    },
+  },
+  polypizza: {
+    on: () => !!process.env.POLY_PIZZA_KEY,
+    async search(q, page) {
+      const url = `https://api.poly.pizza/v1.1/search/${encodeURIComponent(q || "animal")}?${new URLSearchParams({ Limit: String(PER), Page: String(page - 1) })}`;
+      const res = await fetch(url, { headers: { "x-auth-token": process.env.POLY_PIZZA_KEY } });
+      if (!res.ok) throw new Error(`Poly Pizza ${res.status}`);
+      const data = await res.json();
+      return {
+        items: (data.results || []).map((t) => ({
+          id: `pp-${t.ID}`,
+          uid: String(t.ID),
+          source: "polypizza",
+          title: t.Title,
+          by: t.Creator?.Username || "Unknown designer",
+          byUrl: t.Creator?.Username ? `https://poly.pizza/u/${encodeURIComponent(t.Creator.Username)}` : undefined,
+          image: t.Thumbnail,
+          url: `https://poly.pizza/m/${t.ID}`,
+          licenseLabel: t.Licence || "See the model page",
+          license: /CC0/i.test(t.Licence || "") ? "cc0" : /CC-?BY/i.test(t.Licence || "") ? "by" : "unknown",
+          download: /^https:\/\/static\.poly\.pizza\/.+\.glb$/i.test(t.Download || "") ? t.Download : null,
         })),
         next: (data.total || 0) > page * PER ? page + 1 : null,
       };

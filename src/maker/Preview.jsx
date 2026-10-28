@@ -2,6 +2,7 @@ import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef } from "rea
 import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { geometryFromData } from "../builder/Viewport.jsx";
+import { compareObject } from "./compare.js";
 
 // A friendly turntable view of one finished model. The parent passes the
 // combined mesh from the CAD worker; this only draws it.
@@ -22,6 +23,8 @@ const Preview = forwardRef(function Preview(
     onSpinStop,
     onPick,
     selected,
+    compare = "none",
+    mode = "turn",
   },
   ref,
 ) {
@@ -89,7 +92,9 @@ const Preview = forwardRef(function Preview(
     const orbit = new OrbitControls(camera, renderer.domElement);
     orbit.enableDamping = true;
     orbit.dampingFactor = 0.1;
-    orbit.enablePan = false;
+    orbit.enablePan = true;
+    orbit.screenSpacePanning = true;
+    orbit.zoomToCursor = true;
     orbit.addEventListener("start", () => stopRef.current?.());
 
     // Click a part to pick it; hovering a part lights it up a little.
@@ -147,6 +152,7 @@ const Preview = forwardRef(function Preview(
       last = now;
       if (spinRef.current) turn.rotation.z += dt * 0.5;
       const s = st.current;
+      if (s?.move) easeView(s);
       if (s) {
         const fl = s.flash && Math.max(0, 1 - (now - s.flash.t0) / 900);
         for (const [region, p] of s.parts) {
@@ -230,7 +236,9 @@ const Preview = forwardRef(function Preview(
     const radius = Math.max(size.x, size.y) * 0.62 + 8;
     s.table.scale.set(radius, 2, radius);
     s.table.position.z = -1;
-    frame(s, size, false);
+    s.modelSize = size;
+    placeCompare(s, s.compareId, false);
+    if (!s.compareObj) frame(s, size, false);
     // Thumbnails can zoom in on a few regions (a hat, a face).
     const fb = new THREE.Box3();
     for (const r of focus || []) if (next.has(r)) fb.union(next.get(r).obj.geometry.boundingBox);
@@ -251,6 +259,22 @@ const Preview = forwardRef(function Preview(
     for (const [region, entry] of s.parts) entry.obj.material.color.set(colorOf(region));
   }, [color, colors]);
 
+  useEffect(() => {
+    const s = st.current;
+    if (!s) return;
+    s.compareId = compare;
+    if (s.modelSize) placeCompare(s, compare, true);
+  }, [compare]);
+
+  // Left drag (or one finger) turns the model, or moves it in "move" mode.
+  useEffect(() => {
+    const s = st.current;
+    if (!s) return;
+    s.orbit.mouseButtons.LEFT = mode === "move" ? THREE.MOUSE.PAN : THREE.MOUSE.ROTATE;
+    s.orbit.mouseButtons.RIGHT = mode === "move" ? THREE.MOUSE.ROTATE : THREE.MOUSE.PAN;
+    s.orbit.touches.ONE = mode === "move" ? THREE.TOUCH.PAN : THREE.TOUCH.ROTATE;
+  }, [mode]);
+
   // Flash the part that was just picked so it's clear what changed.
   useEffect(() => {
     if (st.current && selected) st.current.flash = { region: selected.region, t0: performance.now() };
@@ -260,13 +284,117 @@ const Preview = forwardRef(function Preview(
     reframe: () => {
       const s = st.current;
       if (!s?.box) return;
-      frame(s, new THREE.Vector3().subVectors(s.box.max, s.box.min), true);
+      if (s.compareObj) placeCompare(s, s.compareId, true);
+      else frame(s, new THREE.Vector3().subVectors(s.box.max, s.box.min), true);
     },
     snapshot: () => st.current?.renderer.domElement.toDataURL("image/png"),
+    // Buttons: turn and tilt in radians, zoom as a factor (<1 is closer),
+    // pan as a share of the view.
+    nudge: ({ turn = 0, tilt = 0, zoom = 1, panX = 0, panY = 0 }) => {
+      const s = st.current;
+      if (!s) return;
+      stopRef.current?.();
+      const m = (s.move ||= { turn: 0, tilt: 0, zoom: 0, panX: 0, panY: 0 });
+      m.turn += turn;
+      m.tilt += tilt;
+      m.zoom += Math.log(zoom);
+      m.panX += panX;
+      m.panY += panY;
+    },
   }));
 
   return <div className="pv" ref={hostRef} />;
 });
+
+// Moves the camera a bit each frame toward what the view buttons asked for.
+function easeView(s) {
+  const m = s.move;
+  const k = 0.2;
+  const cam = s.camera;
+  const target = s.orbit.target;
+  const off = cam.position.clone().sub(target);
+  const up = new THREE.Vector3(0, 0, 1);
+  if (m.turn) off.applyAxisAngle(up, m.turn * k);
+  if (m.tilt) {
+    const axis = new THREE.Vector3().crossVectors(off, up).normalize();
+    const angle = off.angleTo(up);
+    const want = Math.min(Math.PI * 0.49, Math.max(0.08, angle - m.tilt * k));
+    if (axis.lengthSq() > 0) off.applyAxisAngle(axis, angle - want);
+  }
+  if (m.zoom) {
+    const d = off.length() * Math.exp(m.zoom * k);
+    off.setLength(Math.min(s.orbit.maxDistance, Math.max(s.orbit.minDistance, d)));
+  }
+  if (m.panX || m.panY) {
+    const span = off.length() * 0.6;
+    const right = new THREE.Vector3()
+      .crossVectors(off, up)
+      .normalize()
+      .multiplyScalar(-m.panX * k * span);
+    const lift = up.clone().multiplyScalar(m.panY * k * span);
+    target.add(right).add(lift);
+  }
+  cam.position.copy(target).add(off);
+  for (const key of ["turn", "tilt", "zoom", "panX", "panY"]) m[key] = Math.abs(m[key] * (1 - k)) < 0.001 ? 0 : m[key] * (1 - k);
+  if (!m.turn && !m.tilt && !m.zoom && !m.panX && !m.panY) s.move = null;
+}
+
+// Puts the size-comparison object (if any) next to the model and frames both.
+// Dimension lines turn with the model; everyday objects stand still beside
+// the circle the model sweeps, so spinning never runs them into each other.
+function placeCompare(s, id, refit) {
+  if (s.compareObj) {
+    s.compareObj.parent?.remove(s.compareObj);
+    s.compareObj.traverse((o) => {
+      o.geometry?.dispose();
+      [].concat(o.material || []).forEach((mt) => {
+        mt.map?.dispose();
+        mt.dispose();
+      });
+    });
+    s.compareObj = null;
+  }
+  const size = s.modelSize;
+  const obj = compareObject(id, size);
+  if (!obj) {
+    s.table.scale.set(Math.max(size.x, size.y) * 0.62 + 8, 2, Math.max(size.x, size.y) * 0.62 + 8);
+    if (refit) frame(s, size, true);
+    return;
+  }
+  const r = Math.hypot(size.x, size.y) / 2;
+  const box = new THREE.Box3(new THREE.Vector3(-r, -r, 0), new THREE.Vector3(r, r, size.z));
+  obj.updateMatrixWorld(true);
+  box.union(new THREE.Box3().setFromObject(obj));
+  s.compareObj = obj;
+  (id === "dims" ? s.turn : s.scene).add(obj);
+  const reach = Math.max(Math.abs(box.min.x), Math.abs(box.max.x), Math.abs(box.min.y), Math.abs(box.max.y));
+  s.table.scale.set(reach * 1.08 + 6, 2, reach * 1.08 + 6);
+  fitBox(s, box, refit);
+}
+
+// Frames a box so all of it shows from any angle.
+function fitBox(s, box, force) {
+  const cam = s.camera;
+  const center = box.getCenter(new THREE.Vector3());
+  const R = box.getSize(new THREE.Vector3()).length() / 2;
+  const vf = THREE.MathUtils.degToRad(cam.fov) / 2;
+  const hf = Math.atan(Math.tan(vf) * cam.aspect);
+  const dist = (R / Math.sin(Math.min(vf, hf))) * 1.02;
+  const home = new THREE.Vector3(0.45, -0.78, 0.48);
+  const dir = force || !s.framedFor ? home : cam.position.clone().sub(s.orbit.target);
+  dir.normalize();
+  s.framedFor = Math.max(box.max.x - box.min.x, box.max.y - box.min.y, box.max.z * 1.2);
+  s.orbit.target.copy(center);
+  s.orbit.minDistance = R * 0.3;
+  s.orbit.maxDistance = R * 8;
+  cam.position.copy(center).addScaledVector(dir, dist);
+  cam.near = Math.max(0.5, dist / 100);
+  cam.far = dist * 20;
+  cam.updateProjectionMatrix();
+  const sh = s.sun.shadow.camera;
+  Object.assign(sh, { left: -R * 1.3, right: R * 1.3, top: R * 1.3, bottom: -R * 1.3 });
+  sh.updateProjectionMatrix();
+}
 
 // Points the camera at the model. Small changes keep the current view so
 // slider tweaks don't make the camera jump around.
@@ -282,6 +410,8 @@ function frame(s, size, force) {
   const dir = force || first ? home : s.camera.position.clone().sub(s.orbit.target);
   dir.normalize();
   s.orbit.target.set(0, 0, size.z * 0.42);
+  s.orbit.minDistance = span * 0.25;
+  s.orbit.maxDistance = span * 8;
   s.camera.position.copy(s.orbit.target).addScaledVector(dir, dist);
   s.camera.near = Math.max(0.5, dist / 100);
   s.camera.far = dist * 20;
