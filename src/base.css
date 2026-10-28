@@ -1,21 +1,29 @@
 :root {
-  --cream: #fff8ef;
-  --cream-2: #ffeedd;
-  --ink: #241a45;
-  --ink-2: #4a4170;
-  --muted: #6e6790;
-  --tangerine: #ff6b35;
-  --tangerine-dk: #e2531f;
-  --grape: #6c4bd8;
-  --grape-lt: #ece6ff;
-  --mint: #1fb59a;
-  --mint-lt: #d9f6ef;
-  --sun: #ffc93c;
-  --sun-lt: #fff1c7;
-  --berry: #e8457c;
-  --line: #eadfce;
-  --shadow: 0 4px 0 rgba(36, 26, 69, 0.12);
-  --radius: 22px;
+  --bg: #f4f2ee;
+  --bg-2: #ebe8e2;
+  --surface: #ffffff;
+  --ink: #16141c;
+  --ink-2: #3f3b48;
+  --muted: #6f6a78;
+  --line: #e2ded6;
+  --accent: #5b45ff;
+  --accent-dk: #4330e0;
+  --accent-lt: #ecebff;
+  --lime: #d4f84a;
+  --coral: #ff6a3d;
+  --sky: #cbe6ff;
+  --peach: #ffe2d1;
+  --mint: #cff3e1;
+  --lilac: #e7dcff;
+  --good: #0f8a5f;
+  --good-lt: #dcf5e9;
+  --warn: #8f5a00;
+  --warn-lt: #fff0c9;
+  --bad: #c12a4b;
+  --bad-lt: #ffe2e8;
+  --radius: 20px;
+  --shadow: 0 1px 2px rgba(22, 20, 28, 0.06), 0 10px 30px rgba(22, 20, 28, 0.07);
+  --display: "Bricolage Grotesque Variable", "Inter", system-ui, sans-serif;
 }
 *,
 *::before,
@@ -27,23 +35,24 @@ body {
   margin: 0;
 }
 body {
-  background: var(--cream);
+  background: var(--bg);
   color: var(--ink);
-  font: 500 17px/1.55 "Fredoka", system-ui, sans-serif;
+  font: 400 16px/1.55 "Inter", system-ui, sans-serif;
   -webkit-font-smoothing: antialiased;
 }
 img {
   max-width: 100%;
 }
 button,
-input {
+input,
+select {
   font: inherit;
 }
 a {
   color: inherit;
 }
 :focus-visible {
-  outline: 3px solid var(--grape);
+  outline: 2px solid var(--accent);
   outline-offset: 2px;
 }
 .page-loading {
@@ -51,5 +60,27 @@ a {
   display: grid;
   place-items: center;
   color: var(--muted);
-  font-size: 20px;
+  font-size: 18px;
+}
+
+/* Letter-style previews use the same fonts the printer gets. */
+@font-face {
+  font-family: "LL Fredoka";
+  src: url("/fonts/fredoka-bold.woff") format("woff");
+  font-display: swap;
+}
+@font-face {
+  font-family: "LL Archivo Black";
+  src: url("/fonts/archivo-black.woff") format("woff");
+  font-display: swap;
+}
+@font-face {
+  font-family: "LL Courgette";
+  src: url("/fonts/courgette.woff") format("woff");
+  font-display: swap;
+}
+@font-face {
+  font-family: "LL Space Mono";
+  src: url("/fonts/space-mono-bold.woff") format("woff");
+  font-display: swap;
 }

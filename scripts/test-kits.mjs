@@ -33,5 +33,16 @@ for (const kit of KITS) {
   for (const op of kit.options) if (op.type === "slider") for (const val of [op.min, op.max]) run(kit, { ...d, [op.id]: val }, `${op.id}=${val}`);
   for (let i = 0; i < randoms; i++) run(kit, randomValues(kit, d), `random${i}`);
 }
+// The remixer, on the sample file: every side down, both stands, a script name.
+if (!only || only === "remix") {
+  const { remixParts, remixDefaults, DOWN } = await import("../src/remix.js");
+  const info = await E.importFile("sample", "rocket.stl", buf("public/samples/rocket.stl"));
+  const file = { importId: "sample", kind: info.kind, size: info.size, name: "rocket.stl" };
+  for (const d of DOWN)
+    for (const stand of ["none", "round", "plinth"]) {
+      const v = { ...remixDefaults(), down: d.value, stand, turn: 30, name: stand === "round" ? "Kylie" : "LIFTOFF", font: "Courgette", size: 80 };
+      run({ id: "remix", build: (x) => remixParts(file, x) }, v, `${d.value}/${stand}`);
+    }
+}
 console.log(fails ? `${fails} failures` : "all kits built");
 process.exit(fails ? 1 : 0);

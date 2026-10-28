@@ -1,18 +1,19 @@
 // CAD engine shared by the web worker and the Node tests. It keeps a cache of
 // built shapes (by geometry, not placement) and imported files (by id).
 import * as R from "replicad";
-import { buildShape, place, centered } from "./shapes.js";
+import { buildShape, place, centered, textPieces } from "./shapes.js";
 import { readThreeMF } from "./threemf.js";
 
 const shapeCache = new Map(); // geometry key -> local solid
 const imports = new Map(); // import id -> { kind: "solid" | "mesh", shape }
 const fonts = new Set();
+const fontFiles = new Map(); // family -> opentype font, for letter spacing
 
 const MESH_OPTS = { tolerance: 0.08, angularTolerance: 0.25 };
 
 export async function loadFonts(list) {
   for (const { family, data } of list) {
-    await R.loadFont(data, family);
+    fontFiles.set(family, await R.loadFont(data, family));
     fonts.add(family);
   }
 }
@@ -153,7 +154,12 @@ function localMesh(obj) {
   const key = geometryKey(obj);
   let m = meshCache.get(key);
   if (!m) {
-    m = localShape(obj).meshShape(MESH_OPTS);
+    try {
+      m = localShape(obj).meshShape(MESH_OPTS);
+    } catch (e) {
+      if (obj.type !== "text") throw e;
+      m = textMesh(obj);
+    }
     meshCache.set(key, m);
     if (meshCache.size > 300) {
       const oldest = meshCache.keys().next().value;
@@ -162,6 +168,23 @@ function localMesh(obj) {
     }
   }
   return m;
+}
+
+function textMesh(obj) {
+  const { Manifold } = R.getManifold();
+  const family = fonts.has(obj.params.font) ? obj.params.font : fonts.values().next().value;
+  const meshes = textPieces(obj, fonts, fontFiles.get(family)).map((solid) => {
+    const mesh = solid.meshShape(MESH_OPTS);
+    free(solid);
+    return mesh;
+  });
+  try {
+    const u = Manifold.union(meshes.map((m) => m.wrapped));
+    u.numVert();
+    return new R.MeshShape(u);
+  } finally {
+    meshes.forEach(free);
+  }
 }
 
 // Same placement as shapes.place(), done with Manifold's own transforms

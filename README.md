@@ -2,7 +2,7 @@
 
 **Discover it. Customize it. Print it.**
 
-A novelty 3D print shop for kids and grown-ups. People pick a ready-made base (a robot, a pumpkin, a keychain…), change it with big sliders and buttons like a video game character creator, and order the print or save the 3D file.
+A 3D print shop and "model mall". People search the big model sites (Printables, MakerWorld, Thingiverse…) from one box, bring a downloaded file back to recolor, resize, turn and add a name stand, or start from one of our bases, like the figure builder, which works like a game's character screen. Then they order the print or save the file.
 
 Built on the ProtoLab CAD engine (replicad/OpenCascade + Manifold, in a web worker).
 
@@ -10,14 +10,18 @@ Built on the ProtoLab CAD engine (replicad/OpenCascade + Manifold, in a web work
 
 | Path | What it is |
 |---|---|
-| `/` | Landing page: categories, how it works, what's in season |
+| `/` | Home: Discover / Customize / Print, the figure builder, the mall, what's in season |
+| `/discover` | The model mall: one search that deep-links into every store, aisles (ready-made searches), store cards with license flags, a license guide. `/community` goes here too |
+| `/remix` | Drop a .stl/.3mf/.step from any site: size, side on the table, spin, mirror, round or plinth name stand, color, and a License tab (store, license, designer, link). ND licenses lock the stand; NC/unknown licenses get a "we'll check first" note on the order |
 | `/shop` | Ready-made items, filtered by kind (novelty, seasonal, personal) and season |
-| `/make` | The maker: pick a base, change it, see size, printer fit and an estimate. Links are shareable (`/make?kit=robot&v=…`) |
-| `/community` | Links to free model sites, each flagged with its license situation, plus a quick license guide |
+| `/make` | The maker: pick a base (the figure builder first), change it, see size, printer fit and an estimate. Links are shareable (`/make?kit=figure&v=…`) |
 | `/studio` | The full ProtoLab editor (import STL/3MF/STEP, sketch, holes, measure…). Anything from the maker opens here with "More tools" |
 
 ## How it fits together
 
+- **Figure builder** (`src/figure.js`): the kit with the most options (head, face, hair and hats, body, arms and held items, legs, gear, stand). `FIGURE_LOOKS` are the starter looks on the home page.
+- **Stores** (`src/stores.js`): the mall's stores, their search URL patterns, license flags, aisles and the license table used by the remixer.
+- **Remixer** (`src/remix.js`, `src/maker/Remix.jsx`): turns an imported file into parts (the file plus an optional stand). The file is kept in the browser's IndexedDB so a reload keeps it.
 - **Kits** (`src/kits.js`): each kit is a list of options (slider, choice, toggle, text) and a `build(values)` function that returns plain builder parts. The same parts open in the Studio.
 - **Shop items** (`src/catalog.js`): a kit plus preset values, a category and a season. Add an item there, then render its picture.
 - **Maker preview** uses a fast mesh path (`previewMesh` in `src/cad/engine.js`): each part is meshed once by OpenCascade and cached, then joined and cut in Manifold. It's much faster, and it avoids an OpenCascade memory leak on 3D text (about 70 MB per join) that crashed the page after a dozen rebuilds. Parts are placed with Manifold's own transforms because replicad's `MeshShape.rotate` gave inconsistent results. STEP export from the Studio still uses the exact path.
@@ -34,8 +38,9 @@ Built on the ProtoLab CAD engine (replicad/OpenCascade + Manifold, in a web work
 ## Owner should confirm
 
 - Printer, pricing, and how orders work (same open questions as ProtoLab).
-- Whether to print non-commercial (CC BY-NC) models from other sites as paid orders. The community page currently says "We check with you before printing it as an order."
-- The license summaries on the community page (they describe each site in general; each model's own license is what counts).
+- Whether to print non-commercial (CC BY-NC) models from other sites as paid orders. The remixer currently says "We'll check it with you first."
+- The license summaries on the mall page (they describe each site in general; each model's own license is what counts).
+- The store search links (`src/stores.js`) follow each site's current search URL. They couldn't be tested from the build machine (the sites block scripted requests), so click through each once.
 
 ## Develop
 
@@ -46,4 +51,6 @@ npm test         # builds every kit option (fast path, checked against the exact
 npm run build
 ```
 
-Fonts for 3D text are SIL Open Font License fonts from Fontsource (Fredoka, Archivo Black, Courgette, Space Mono) in `public/fonts/`. Pacifico was dropped: its overlapping letter strokes made the letters vanish when joined to a base.
+3D text joins letters one by one in the mesh path when a script font's letters overlap (e.g. "KL" in Courgette), so names never come out broken.
+
+The site uses Bricolage Grotesque and Inter. Fonts for 3D text are SIL Open Font License fonts from Fontsource (Fredoka, Archivo Black, Courgette, Space Mono) in `public/fonts/`. Pacifico was dropped: its overlapping letter strokes made the letters vanish when joined to a base.

@@ -3,6 +3,8 @@
     { "source": "/shop", "destination": "/index.html" },
     { "source": "/make", "destination": "/index.html" },
     { "source": "/community", "destination": "/index.html" },
+    { "source": "/discover", "destination": "/index.html" },
+    { "source": "/remix", "destination": "/index.html" },
     { "source": "/studio", "destination": "/index.html" },
     { "source": "/build", "destination": "/index.html" }
   ],

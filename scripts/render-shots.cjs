@@ -8,9 +8,14 @@ const only = process.argv[2];
 (async () => {
   const { PRODUCTS } = await import(path.resolve(__dirname, "../src/catalog.js"));
   const { KITS } = await import(path.resolve(__dirname, "../src/kits.js"));
+  const { FIGURE_LOOKS } = await import(path.resolve(__dirname, "../src/figure.js"));
   const jobs = [
     ...PRODUCTS.map((p) => ({ name: p.id, url: `/make?p=${p.id}&shot=1` })),
     ...KITS.map((k) => ({ name: `kit-${k.id}`, url: `/make?kit=${k.id}&shot=1` })),
+    ...FIGURE_LOOKS.map((f) => ({
+      name: `fig-${f.id}`,
+      url: `/make?kit=figure&v=${encodeURIComponent(JSON.stringify(f.values))}&c=${f.color.slice(1)}&shot=1`,
+    })),
   ].filter((j) => !only || j.name.includes(only));
   const browser = await chromium.launch({ args: ["--use-gl=angle", "--use-angle=swiftshader", "--enable-unsafe-swiftshader"] });
   const page = await browser.newPage({ viewport: { width: 640, height: 640 }, deviceScaleFactor: 1 });

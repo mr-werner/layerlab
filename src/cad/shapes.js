@@ -93,4 +93,24 @@ export function place(shape, obj) {
   return s.translate(x, y, z);
 }
 
+// Script fonts can overlap neighboring letters, which makes one broken
+// outline. The mesh path builds each letter on its own instead, at the same
+// spot, and joins them. `font` is the opentype font for spacing.
+export function textPieces(obj, fonts, font) {
+  const p = obj.params;
+  const family = fonts.has(p.font) ? p.font : fonts.values().next().value;
+  const text = (p.text || "").trim() || "Text";
+  const chars = [...text];
+  const solids = [];
+  chars.forEach((ch, i) => {
+    if (!ch.trim()) return;
+    const startX = font.getAdvanceWidth(chars.slice(0, i).join(""), p.size);
+    solids.push(drawText(ch, { startX, fontSize: p.size, fontFamily: family }).sketchOnPlane("XY").extrude(p.depth));
+  });
+  const [[x0, y0, z0], [x1, y1]] = solids
+    .map((s) => s.boundingBox.bounds)
+    .reduce(([lo, hi], [a, b]) => [lo.map((v, i) => Math.min(v, a[i])), hi.map((v, i) => Math.max(v, b[i]))]);
+  return solids.map((s) => s.translate(-(x0 + x1) / 2, -(y0 + y1) / 2, -z0));
+}
+
 export { centered };

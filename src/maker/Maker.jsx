@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Preview from "./Preview.jsx";
+import { Control, Swatches } from "./Controls.jsx";
+import { useBuild, inches, download } from "./useBuild.js";
 import { Header } from "../site/Chrome.jsx";
 import { KITS, KIT_BY_ID, defaultValues, cleanValues, randomValues, buildKit } from "../kits.js";
 import { PRODUCT_BY_ID } from "../catalog.js";
@@ -27,17 +29,6 @@ function readStart() {
   return { kit, values, color };
 }
 
-const inches = (mm) => (mm / 25.4).toFixed(mm < 254 ? 1 : 0);
-
-function download(name, bytes, type) {
-  const url = URL.createObjectURL(new Blob([bytes], { type }));
-  const a = Object.assign(document.createElement("a"), { href: url, download: name });
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  setTimeout(() => URL.revokeObjectURL(url), 2000);
-}
-
 export default function Maker() {
   const start = useMemo(readStart, []);
   const [kit, setKit] = useState(start.kit);
@@ -45,10 +36,6 @@ export default function Maker() {
   const [color, setColor] = useState(start.color);
   const [history, setHistory] = useState([]);
   const [tab, setTab] = useState(start.kit.options[0].group);
-  const [mesh, setMesh] = useState(null);
-  const [size, setSize] = useState(null);
-  const [status, setStatus] = useState("warming"); // warming | building | ready | error
-  const [error, setError] = useState("");
   const [spin, setSpin] = useState(true);
   const [panel, setPanel] = useState(null); // order | null
   const [toast, setToast] = useState("");
@@ -58,44 +45,7 @@ export default function Maker() {
   const groups = useMemo(() => [...new Set(kit.options.map((o) => o.group)), "Color"], [kit]);
   const parts = useMemo(() => buildKit(kit, values), [kit, values]);
 
-  // Build the model in the worker. Only the newest request matters, so
-  // slider drags don't queue up dozens of builds.
-  const job = useRef({ running: false, next: null });
-  useEffect(() => {
-    const j = job.current;
-    j.next = parts;
-    if (j.running) return;
-    const run = async () => {
-      j.running = true;
-      while (j.next) {
-        const objs = j.next;
-        j.next = null;
-        setStatus((s) => (s === "warming" ? s : "building"));
-        try {
-          const res = await cad("preview", { objects: objs, fast: true });
-          if (j.next) continue;
-          const v = res.mesh.vertices;
-          const mn = [Infinity, Infinity, Infinity];
-          const mx = [-Infinity, -Infinity, -Infinity];
-          for (let i = 0; i < v.length; i += 3)
-            for (let k = 0; k < 3; k++) {
-              if (v[i + k] < mn[k]) mn[k] = v[i + k];
-              if (v[i + k] > mx[k]) mx[k] = v[i + k];
-            }
-          setSize(mx.map((x, k) => x - mn[k]));
-          setMesh(res.mesh);
-          setError("");
-          setStatus("ready");
-        } catch (e) {
-          if (j.next) continue;
-          setError(e.message || "That combination didn't work. Try a different setting.");
-          setStatus("error");
-        }
-      }
-      j.running = false;
-    };
-    run();
-  }, [parts]);
+  const { mesh, size, status, error } = useBuild(parts);
 
   // On phones the base list scrolls sideways; keep the chosen one in view.
   useEffect(() => {
@@ -200,14 +150,21 @@ export default function Maker() {
       <Header active="/make" />
       <div className="mk-grid">
         <aside className="mk-kits" aria-label="Pick something to make">
-          <h2>1. Pick a base</h2>
+          <h2>Start from</h2>
           <div className="mk-kit-list">
             {KITS.map((k) => (
-              <button key={k.id} className={`mk-kit ${k.id === kit.id ? "on" : ""}`} onClick={() => pickKit(k)} aria-pressed={k.id === kit.id}>
+              <button key={k.id} className={`mk-kit ${k.id === kit.id ? "on" : ""} ${k.featured ? "featured" : ""}`} onClick={() => pickKit(k)} aria-pressed={k.id === kit.id}>
                 <img src={`/shots/kit-${k.id}.png`} alt="" loading="lazy" />
                 <span>{k.name}</span>
+                {k.featured && <b className="mk-new">New</b>}
               </button>
             ))}
+            <a className="mk-kit mk-remix" href="/remix">
+              <span className="mk-plus" aria-hidden="true">
+                +
+              </span>
+              <span>Your own file</span>
+            </a>
           </div>
         </aside>
 
@@ -217,8 +174,8 @@ export default function Maker() {
             {status === "warming" && (
               <div className="mk-loading">
                 <div className="mk-spark" />
-                <p>Warming up the workshop…</p>
-                <small>The 3D engine takes a few seconds the first time.</small>
+                <p>Warming up the 3D engine…</p>
+                <small>Takes a few seconds the first time.</small>
               </div>
             )}
             {status === "building" && <div className="mk-chip building">Shaping…</div>}
@@ -252,7 +209,7 @@ export default function Maker() {
 
         <section className="mk-panel" aria-label="Change it">
           <div className="mk-panel-head">
-            <h2>2. Make it yours</h2>
+            <h2>{kit.name}</h2>
             <p>{kit.tagline}</p>
           </div>
           <div className="mk-tabs" role="tablist">
@@ -264,34 +221,20 @@ export default function Maker() {
           </div>
           <div className="mk-controls" role="tabpanel">
             {tab === "Color" ? (
-              <div className="mk-field">
-                <span className="mk-label">
-                  Color <em>{COLORS.find((c) => c.value === color)?.label}</em>
-                </span>
-                <div className="mk-swatches">
-                  {COLORS.map((c) => (
-                    <button
-                      key={c.value}
-                      className={c.value === color ? "on" : ""}
-                      style={{ "--sw": c.value }}
-                      onClick={() => {
-                        remember();
-                        setColor(c.value);
-                      }}
-                      aria-label={c.label}
-                      title={c.label}
-                    />
-                  ))}
-                </div>
-                <p className="mk-hint">One filament color per print. Ask about two-color prints when you order.</p>
-              </div>
+              <Swatches
+                color={color}
+                onPick={(c) => {
+                  remember();
+                  setColor(c);
+                }}
+              />
             ) : (
               options.map((op) => <Control key={op.id} op={op} value={values[op.id]} onChange={setValue} />)
             )}
           </div>
           <div className="mk-quick">
             <button className="fun" onClick={surprise}>
-              <span aria-hidden="true">✦</span> Surprise me
+              <span aria-hidden="true">✦</span> Randomize
             </button>
             <button onClick={undo} disabled={!history.length}>
               Undo
@@ -299,7 +242,7 @@ export default function Maker() {
             <button onClick={reset}>Start over</button>
           </div>
           <div className="mk-actions">
-            <h2>3. Get it printed</h2>
+            <h2>Print it</h2>
             <button className="primary" onClick={() => setPanel("order")} disabled={!size}>
               Order this print
             </button>
@@ -351,90 +294,6 @@ export default function Maker() {
         </div>
       )}
       {toast && <div className="mk-toast" role="status">{toast}</div>}
-    </div>
-  );
-}
-
-function Control({ op, value, onChange }) {
-  const id = `op-${op.id}`;
-  if (op.type === "slider") {
-    const shown = op.unit === "mm" ? `${value} mm` : op.unit === "%" ? `${value}%` : value;
-    return (
-      <div className="mk-field">
-        <label className="mk-label" htmlFor={id}>
-          {op.label} <em>{shown}</em>
-        </label>
-        <div className="mk-slider">
-          <button aria-label={`Less ${op.label.toLowerCase()}`} onClick={() => onChange(op.id, Math.max(op.min, +(value - op.step).toFixed(2)))}>
-            −
-          </button>
-          <input
-            id={id}
-            type="range"
-            min={op.min}
-            max={op.max}
-            step={op.step}
-            value={value}
-            style={{ "--pct": `${((value - op.min) / (op.max - op.min)) * 100}%` }}
-            onPointerDown={() => onChange(op.id, value)}
-            onChange={(e) => onChange(op.id, Number(e.target.value), { commit: false })}
-          />
-          <button aria-label={`More ${op.label.toLowerCase()}`} onClick={() => onChange(op.id, Math.min(op.max, +(value + op.step).toFixed(2)))}>
-            +
-          </button>
-        </div>
-        {op.hint && <p className="mk-hint">{op.hint}</p>}
-      </div>
-    );
-  }
-  if (op.type === "choice") {
-    return (
-      <div className="mk-field" role="radiogroup" aria-label={op.label}>
-        <span className="mk-label">{op.label}</span>
-        <div className="mk-choices">
-          {op.choices.map((c) => (
-            <button
-              key={c.value}
-              role="radio"
-              aria-checked={value === c.value}
-              className={`${value === c.value ? "on" : ""} ${op.id === "font" ? "font-" + c.value.replace(/\s+/g, "-").toLowerCase() : ""}`}
-              onClick={() => onChange(op.id, c.value)}
-            >
-              {c.label}
-            </button>
-          ))}
-        </div>
-        {op.hint && <p className="mk-hint">{op.hint}</p>}
-      </div>
-    );
-  }
-  if (op.type === "toggle") {
-    return (
-      <div className="mk-field mk-toggle-row">
-        <span className="mk-label">{op.label}</span>
-        <button role="switch" aria-checked={!!value} className={`mk-switch ${value ? "on" : ""}`} onClick={() => onChange(op.id, !value)}>
-          <span />
-          {value ? "On" : "Off"}
-        </button>
-        {op.hint && <p className="mk-hint">{op.hint}</p>}
-      </div>
-    );
-  }
-  return (
-    <div className="mk-field">
-      <label className="mk-label" htmlFor={id}>
-        {op.label} <em>{(value || "").length}/{op.max}</em>
-      </label>
-      <input
-        id={id}
-        className="mk-text"
-        value={value}
-        maxLength={op.max}
-        onFocus={() => onChange(op.id, value)}
-        onChange={(e) => onChange(op.id, e.target.value, { commit: false })}
-        placeholder="Type here"
-        autoComplete="off"
-      />
     </div>
   );
 }

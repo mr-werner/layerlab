@@ -5,7 +5,7 @@ import { geometryFromData } from "../builder/Viewport.jsx";
 
 // A friendly turntable view of one finished model. The parent passes the
 // combined mesh from the CAD worker; this only draws it.
-const Preview = forwardRef(function Preview({ mesh, color, spin = true, background = 0xfff4e6, table: showTable = true, onSpinStop }, ref) {
+const Preview = forwardRef(function Preview({ mesh, color, spin = true, background = 0xeae7e1, table: showTable = true, onSpinStop }, ref) {
   const hostRef = useRef(null);
   const st = useRef(null);
   const spinRef = useRef(spin);
@@ -28,7 +28,7 @@ const Preview = forwardRef(function Preview({ mesh, color, spin = true, backgrou
     camera.up.set(0, 0, 1);
     camera.position.set(120, -200, 140);
 
-    scene.add(new THREE.HemisphereLight(0xffffff, 0xf3d9c0, 1.9));
+    scene.add(new THREE.HemisphereLight(0xffffff, 0xd9d4cc, 1.9));
     const sun = new THREE.DirectionalLight(0xffffff, 2.1);
     sun.position.set(120, -160, 300);
     sun.castShadow = true;
@@ -36,7 +36,7 @@ const Preview = forwardRef(function Preview({ mesh, color, spin = true, backgrou
     sun.shadow.radius = 4;
     Object.assign(sun.shadow.camera, { left: -200, right: 200, top: 200, bottom: -200, near: 10, far: 1000 });
     scene.add(sun);
-    const rim = new THREE.DirectionalLight(0xffe2c4, 0.9);
+    const rim = new THREE.DirectionalLight(0xe6e0ff, 0.9);
     rim.position.set(-200, 220, 160);
     scene.add(rim);
 

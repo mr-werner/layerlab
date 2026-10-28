@@ -22,9 +22,9 @@
     "three": "^0.170.0"
   },
   "devDependencies": {
+    "@fontsource-variable/bricolage-grotesque": "^5.3.0",
     "@fontsource/archivo-black": "^5.3.0",
-    "@fontsource/baloo-2": "^5.3.0",
-    "@fontsource/fredoka": "^5.3.0",
+    "@fontsource/inter": "^5.3.0",
     "@fontsource/jetbrains-mono": "^5.3.0",
     "@fontsource/space-grotesk": "^5.3.0",
     "@fontsource/space-mono": "^5.3.0",

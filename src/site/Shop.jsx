@@ -22,8 +22,9 @@ export default function Shop() {
     <div className="site">
       <Header active="/shop" />
       <section className="page-head">
-        <h1>The shop</h1>
-        <p>Every item here is a starting point. Tap one to change its size, words, face or color before you order.</p>
+        <p className="eyebrow">Shop</p>
+        <h1>Ready-mades, made to be changed</h1>
+        <p>Every item is a starting point. Open one to change its size, words, face or color before you order.</p>
       </section>
 
       <section className="filters" aria-label="Filter the shop">
@@ -67,11 +68,16 @@ export default function Shop() {
       </section>
 
       <section className="make-own">
-        <h2>Don't see it? Make it.</h2>
-        <p>The maker has robots, pumpkins, snow buddies, ornaments, keychains, signs, dice and plant pots, each with lots of choices.</p>
-        <a className="btn primary" href="/make">
-          Open the maker
-        </a>
+        <h2>Don't see it here?</h2>
+        <p>Search the model mall for anything else, then bring the file back to recolor and resize it. Or build a figure from scratch.</p>
+        <div className="row-ctas">
+          <a className="btn lime" href="/discover">
+            Search the mall
+          </a>
+          <a className="btn" href="/make?kit=figure">
+            Build a figure
+          </a>
+        </div>
       </section>
       <Footer />
     </div>
