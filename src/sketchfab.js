@@ -7,9 +7,9 @@ const API = "https://api.sketchfab.com/v3/search";
 // Sketchfab license names -> our license table (src/stores.js).
 const LICENSE_MAP = [
   [/CC0|Public Domain/i, "cc0"],
-  [/NonCommercial/i, "nc"],
-  [/NoDeriv/i, "nd"],
-  [/ShareAlike/i, "by-sa"],
+  [/Non-?Commercial/i, "nc"],
+  [/No-?Deriv/i, "nd"],
+  [/Share-?Alike/i, "by-sa"],
   [/Attribution/i, "by"],
 ];
 export function licenseId(label = "") {

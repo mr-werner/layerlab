@@ -5,6 +5,8 @@
     { "source": "/community", "destination": "/index.html" },
     { "source": "/discover", "destination": "/index.html" },
     { "source": "/remix", "destination": "/index.html" },
+    { "source": "/upload", "destination": "/index.html" },
+    { "source": "/auth/sketchfab", "destination": "/index.html" },
     { "source": "/studio", "destination": "/index.html" },
     { "source": "/build", "destination": "/index.html" }
   ],

@@ -73,7 +73,7 @@ export default function Landing() {
           <h3>Discover</h3>
           <p>Search our models and thousands from Sketchfab in one gallery. Spin them in 3D right here.</p>
         </a>
-        <a href="/remix" className="flow-step">
+        <a href="/upload" className="flow-step">
           <span>02</span>
           <h3>Customize</h3>
           <p>Resize, turn, recolor each part and add a name stand. Works on our models and files you bring.</p>

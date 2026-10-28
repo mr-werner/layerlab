@@ -4,7 +4,6 @@ import { SITE } from "../config.js";
 const NAV = [
   { href: "/discover", label: "Explore" },
   { href: "/make", label: "Create" },
-  { href: "/remix", label: "Remix" },
   { href: "/shop", label: "Shop" },
 ];
 
@@ -48,6 +47,12 @@ export function Header({ active, search = true }) {
             {n.label}
           </a>
         ))}
+        <a className={`nav-upload ${active === "/upload" ? "on" : ""}`} href="/upload" title="Already have a model?">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M12 16V4m0 0l-5 5m5-5l5 5M5 20h14" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+          Upload
+        </a>
         <a className="nav-cta" href="/make?kit=figure">
           Build a figure
         </a>
@@ -70,7 +75,7 @@ export function Footer() {
         <a href="/discover">Explore</a>
         <a href="/make?kit=figure">Figure builder</a>
         <a href="/make">Create</a>
-        <a href="/remix">Remix a file</a>
+        <a href="/upload">Upload a model</a>
         <a href="/shop">Shop</a>
         <a href="/studio">Studio</a>
       </nav>

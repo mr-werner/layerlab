@@ -2,14 +2,9 @@ import { useEffect, useState } from "react";
 import { Header, Footer } from "./Chrome.jsx";
 import { SearchBox, TopicChips, ModelGrid, ModelModal, useExplore } from "./Gallery.jsx";
 import { TOPICS } from "../gallery.js";
+import { SOURCE_INFO } from "../sources.js";
 import { STORES, FLAGS, LICENSES, storeLink, rememberTrip } from "../stores.js";
 import "./site.css";
-
-const SOURCES = [
-  { id: "all", label: "Everything" },
-  { id: "layerlab", label: "LayerLab" },
-  { id: "sketchfab", label: "Sketchfab" },
-];
 
 export default function Discover() {
   const start = new URLSearchParams(window.location.search).get("q") || "";
@@ -24,10 +19,15 @@ export default function Discover() {
     window.history.replaceState(null, "", term ? `/discover?q=${encodeURIComponent(term)}` : "/discover");
   }, [term]);
 
-  const ours = source === "sketchfab" ? [] : explore.ours;
-  const live = source === "layerlab" ? [] : explore.live;
+  const SOURCES = [
+    { id: "all", label: "Everything" },
+    ...["layerlab", ...explore.sources].map((id) => ({ id, label: SOURCE_INFO[id]?.name || id })),
+  ];
+  const ours = source === "all" || source === "layerlab" ? explore.ours : [];
+  const live = source === "all" ? explore.live : source === "layerlab" ? [] : explore.pick(source);
+  const liveState = source === "all" ? explore.state : source === "layerlab" ? "idle" : explore.bySource[source]?.state || "idle";
   const label = term || (topic.id === "all" ? "" : topic.label);
-  const others = STORES.filter((s) => s.id !== "sketchfab");
+  const others = STORES.filter((s) => !explore.sources.includes(s.id));
 
   return (
     <div className="site">
@@ -47,7 +47,13 @@ export default function Discover() {
           />
           <div className="seg" role="tablist" aria-label="Source">
             {SOURCES.map((s) => (
-              <button key={s.id} role="tab" aria-selected={source === s.id} className={source === s.id ? "on" : ""} onClick={() => setSource(s.id)}>
+              <button
+                key={s.id}
+                role="tab"
+                aria-selected={source === s.id}
+                className={source === s.id ? "on" : ""}
+                onClick={() => setSource(s.id)}
+              >
                 {s.label}
               </button>
             ))}
@@ -59,8 +65,16 @@ export default function Discover() {
         <ModelGrid
           ours={ours}
           live={live}
-          state={source === "layerlab" ? "idle" : explore.state}
-          more={source === "layerlab" ? null : explore.more}
+          state={liveState}
+          more={
+            source === "layerlab" || !explore.more
+              ? null
+              : source === "all"
+                ? explore.more
+                : explore.bySource[source]?.next
+                  ? () => explore.more(source)
+                  : null
+          }
           onOpen={setOpen}
           empty="Nothing here yet. Try another word, or search the stores below."
         />
@@ -69,13 +83,23 @@ export default function Discover() {
       <section className="elsewhere">
         <div className="elsewhere-head">
           <h2 className="sec-title">{label ? `“${label}” in other stores` : "More stores"}</h2>
-          <p>These stores don't let other sites show their models, so these open in a new tab. Download the file, then drop it in the remixer.</p>
+          <p>
+            These stores don't let other sites show their models, so these open in a new tab. Download the file, then drop it in the
+            remixer.
+          </p>
         </div>
         <div className="store-row">
           {others.map((s) => {
             const f = FLAGS[s.flag];
             return (
-              <a key={s.id} className="store" href={storeLink(s, label)} target="_blank" rel="noopener noreferrer" onClick={() => rememberTrip(s.id, label)}>
+              <a
+                key={s.id}
+                className="store"
+                href={storeLink(s, label)}
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={() => rememberTrip(s.id, label)}
+              >
                 <i style={{ background: s.hue }}>{s.name[0]}</i>
                 <span>
                   <strong>{s.name}</strong>
@@ -88,9 +112,12 @@ export default function Discover() {
             );
           })}
         </div>
-        <a className="btn" href="/remix">
-          Got a file? Remix it →
-        </a>
+        <div className="upload-cta">
+          <a className="btn primary big" href="/upload">
+            Upload
+          </a>
+          <p>Already have a model?</p>
+        </div>
       </section>
 
       <section className="licenses">

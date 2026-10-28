@@ -14,7 +14,14 @@ export function Swatches({ color, onPick, label = "Color" }) {
       </span>
       <div className="mk-swatches">
         {COLORS.map((c) => (
-          <button key={c.value} className={c.value === color ? "on" : ""} style={{ "--sw": c.value }} onClick={() => onPick(c.value)} aria-label={c.label} title={c.label} />
+          <button
+            key={c.value}
+            className={c.value === color ? "on" : ""}
+            style={{ "--sw": c.value }}
+            onClick={() => onPick(c.value)}
+            aria-label={c.label}
+            title={c.label}
+          />
         ))}
       </div>
     </div>
@@ -22,14 +29,16 @@ export function Swatches({ color, onPick, label = "Color" }) {
 }
 
 // One color per part: pick a part, then its color. "Everything" paints all.
-export function RegionColors({ regions, colors, onChange, active, onActive }) {
+export function RegionColors({ regions, colors, onChange, active, onActive, compact = false }) {
   const [own, setOwn] = useState(null);
-  const current = active ?? own ?? regions[0].id;
+  const valid = (id) => (id === "*" && !compact) || regions.some((r) => r.id === id);
+  const current = valid(active) ? active : valid(own) ? own : regions[0].id;
   const setCurrent = onActive || setOwn;
-  const paint = (region, value) => onChange(region === "*" ? Object.fromEntries(regions.map((r) => [r.id, value])) : { ...colors, [region]: value });
+  const paint = (region, value) =>
+    onChange(region === "*" ? Object.fromEntries(regions.map((r) => [r.id, value])) : { ...colors, [region]: value });
   const used = new Set(Object.values(colors)).size;
   return (
-    <>
+    <div className={compact ? "mk-tabcolor" : "mk-allcolors"}>
       {regions.length > 1 && (
         <div className="mk-field">
           <span className="mk-label">
@@ -42,24 +51,30 @@ export function RegionColors({ regions, colors, onChange, active, onActive }) {
                 {r.label}
               </button>
             ))}
-            <button className={current === "*" ? "on" : ""} onClick={() => setCurrent("*")}>
-              <i className="all" />
-              Everything
-            </button>
+            {!compact && (
+              <button className={current === "*" ? "on" : ""} onClick={() => setCurrent("*")}>
+                <i className="all" />
+                Everything
+              </button>
+            )}
           </div>
         </div>
       )}
       <Swatches
-        label={current === "*" ? "Color for everything" : `${regions.find((r) => r.id === current)?.label || "Color"}`}
+        label={
+          current === "*" ? "Color for everything" : `${regions.find((r) => r.id === current)?.label || "Color"}${compact ? " color" : ""}`
+        }
         color={current === "*" ? (used === 1 ? Object.values(colors)[0] : null) : colors[current]}
         onPick={(v) => paint(current, v)}
       />
-      <p className="mk-hint">
-        {used > 1
-          ? `This prints in ${used} colors on a multi-color printer. "Save file" gives you a .3mf with every color.`
-          : "Pick a part above to give it its own color."}
-      </p>
-    </>
+      {!compact && (
+        <p className="mk-hint">
+          {used > 1
+            ? `This prints in ${used} colors on a multi-color printer. "Save file" gives you a .3mf with every color.`
+            : "Pick a part above to give it its own color."}
+        </p>
+      )}
+    </div>
   );
 }
 
@@ -73,7 +88,10 @@ export function Control({ op, value, onChange, kitId }) {
           {op.label} <em>{shown}</em>
         </label>
         <div className="mk-slider">
-          <button aria-label={`Less ${op.label.toLowerCase()}`} onClick={() => onChange(op.id, Math.max(op.min, +(value - op.step).toFixed(2)))}>
+          <button
+            aria-label={`Less ${op.label.toLowerCase()}`}
+            onClick={() => onChange(op.id, Math.max(op.min, +(value - op.step).toFixed(2)))}
+          >
             −
           </button>
           <input
@@ -83,11 +101,16 @@ export function Control({ op, value, onChange, kitId }) {
             max={op.max}
             step={op.step}
             value={value}
-            style={{ "--pct": `${((value - op.min) / (op.max - op.min)) * 100}%` }}
+            style={{
+              "--pct": `${((value - op.min) / (op.max - op.min)) * 100}%`,
+            }}
             onPointerDown={() => onChange(op.id, value)}
             onChange={(e) => onChange(op.id, Number(e.target.value), { commit: false })}
           />
-          <button aria-label={`More ${op.label.toLowerCase()}`} onClick={() => onChange(op.id, Math.min(op.max, +(value + op.step).toFixed(2)))}>
+          <button
+            aria-label={`More ${op.label.toLowerCase()}`}
+            onClick={() => onChange(op.id, Math.min(op.max, +(value + op.step).toFixed(2)))}
+          >
             +
           </button>
         </div>
@@ -135,7 +158,10 @@ export function Control({ op, value, onChange, kitId }) {
   return (
     <div className="mk-field">
       <label className="mk-label" htmlFor={id}>
-        {op.label} <em>{(value || "").length}/{op.max}</em>
+        {op.label}{" "}
+        <em>
+          {(value || "").length}/{op.max}
+        </em>
       </label>
       <input
         id={id}

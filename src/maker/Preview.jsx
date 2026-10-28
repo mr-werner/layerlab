@@ -7,17 +7,40 @@ import { geometryFromData } from "../builder/Viewport.jsx";
 // combined mesh from the CAD worker; this only draws it.
 // `meshes` is [{ region, mesh }] and `colors` maps region -> color; a single
 // `mesh` with one `color` works too.
-const Preview = forwardRef(function Preview({ mesh, meshes, color, colors, spin = true, angle = 0, focus = null, focusMin = 0, background = 0x15151c, table: showTable = true, onSpinStop }, ref) {
+const Preview = forwardRef(function Preview(
+  {
+    mesh,
+    meshes,
+    color,
+    colors,
+    spin = true,
+    angle = 0,
+    focus = null,
+    focusMin = 0,
+    background = 0x15151c,
+    table: showTable = true,
+    onSpinStop,
+    onPick,
+    selected,
+  },
+  ref,
+) {
   const hostRef = useRef(null);
   const st = useRef(null);
   const spinRef = useRef(spin);
   spinRef.current = spin;
   const stopRef = useRef(onSpinStop);
   stopRef.current = onSpinStop;
+  const pickRef = useRef(onPick);
+  pickRef.current = onPick;
 
   useEffect(() => {
     const host = hostRef.current;
-    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: background === null, preserveDrawingBuffer: true });
+    const renderer = new THREE.WebGLRenderer({
+      antialias: true,
+      alpha: background === null,
+      preserveDrawingBuffer: true,
+    });
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     renderer.shadowMap.enabled = true;
     renderer.shadowMap.type = THREE.PCFSoftShadowMap;
@@ -36,7 +59,14 @@ const Preview = forwardRef(function Preview({ mesh, meshes, color, colors, spin 
     sun.castShadow = true;
     sun.shadow.mapSize.set(1024, 1024);
     sun.shadow.radius = 4;
-    Object.assign(sun.shadow.camera, { left: -200, right: 200, top: 200, bottom: -200, near: 10, far: 1000 });
+    Object.assign(sun.shadow.camera, {
+      left: -200,
+      right: 200,
+      top: 200,
+      bottom: -200,
+      near: 10,
+      far: 1000,
+    });
     scene.add(sun);
     const rim = new THREE.DirectionalLight(0xe6e0ff, 0.9);
     rim.position.set(-200, 220, 160);
@@ -45,7 +75,7 @@ const Preview = forwardRef(function Preview({ mesh, meshes, color, colors, spin 
     // A round "turntable" the model sits on.
     const table = new THREE.Mesh(
       new THREE.CylinderGeometry(1, 1, 1, 96),
-      new THREE.MeshStandardMaterial({ color: 0x262632, roughness: 0.9 })
+      new THREE.MeshStandardMaterial({ color: 0x262632, roughness: 0.9 }),
     );
     table.rotation.x = Math.PI / 2;
     table.receiveShadow = true;
@@ -61,6 +91,43 @@ const Preview = forwardRef(function Preview({ mesh, meshes, color, colors, spin 
     orbit.dampingFactor = 0.1;
     orbit.enablePan = false;
     orbit.addEventListener("start", () => stopRef.current?.());
+
+    // Click a part to pick it; hovering a part lights it up a little.
+    const ray = new THREE.Raycaster();
+    const hitRegion = (e) => {
+      const s = st.current;
+      if (!s?.parts.size) return null;
+      const r = renderer.domElement.getBoundingClientRect();
+      ray.setFromCamera(new THREE.Vector2(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1), camera);
+      const objs = [...s.parts.values()].map((p) => p.obj);
+      const hit = ray.intersectObjects(objs, false)[0];
+      return hit ? ([...s.parts].find(([, p]) => p.obj === hit.object)?.[0] ?? null) : null;
+    };
+    let down = null;
+    const onDown = (e) => (down = { x: e.clientX, y: e.clientY, t: performance.now() });
+    const onUp = (e) => {
+      if (!down || !pickRef.current) return;
+      const still = Math.hypot(e.clientX - down.x, e.clientY - down.y) < 6 && performance.now() - down.t < 500;
+      down = null;
+      if (!still) return;
+      const region = hitRegion(e);
+      if (region) pickRef.current(region);
+    };
+    let hoverAt = 0;
+    const onMove = (e) => {
+      if (!pickRef.current || e.buttons || e.pointerType === "touch") return;
+      const now = performance.now();
+      if (now - hoverAt < 50) return;
+      hoverAt = now;
+      const region = hitRegion(e);
+      st.current.hover = region;
+      renderer.domElement.style.cursor = region ? "pointer" : "";
+    };
+    const onLeave = () => st.current && (st.current.hover = null);
+    renderer.domElement.addEventListener("pointerdown", onDown);
+    renderer.domElement.addEventListener("pointerup", onUp);
+    renderer.domElement.addEventListener("pointermove", onMove);
+    renderer.domElement.addEventListener("pointerleave", onLeave);
 
     const resize = () => {
       const w = host.clientWidth || 1;
@@ -79,18 +146,41 @@ const Preview = forwardRef(function Preview({ mesh, meshes, color, colors, spin 
       const dt = Math.min(0.05, (now - last) / 1000);
       last = now;
       if (spinRef.current) turn.rotation.z += dt * 0.5;
+      const s = st.current;
+      if (s) {
+        const fl = s.flash && Math.max(0, 1 - (now - s.flash.t0) / 900);
+        for (const [region, p] of s.parts) {
+          const glow = fl && s.flash.region === region ? 0.45 * fl : s.hover === region ? 0.14 : 0;
+          if (p.obj.material.emissive.r !== glow) p.obj.material.emissive.setScalar(glow);
+        }
+      }
       orbit.update();
       renderer.render(scene, camera);
       raf = requestAnimationFrame(loop);
     };
     raf = requestAnimationFrame(loop);
 
-    st.current = { renderer, scene, camera, orbit, turn, table, sun, parts: new Map(), holder: null, framedFor: null };
+    st.current = {
+      renderer,
+      scene,
+      camera,
+      orbit,
+      turn,
+      table,
+      sun,
+      parts: new Map(),
+      holder: null,
+      framedFor: null,
+    };
     return () => {
       cancelAnimationFrame(raf);
       ro.disconnect();
       orbit.dispose();
       renderer.dispose();
+      renderer.domElement.removeEventListener("pointerdown", onDown);
+      renderer.domElement.removeEventListener("pointerup", onUp);
+      renderer.domElement.removeEventListener("pointermove", onMove);
+      renderer.domElement.removeEventListener("pointerleave", onLeave);
       host.removeChild(renderer.domElement);
     };
   }, [background, showTable]);
@@ -160,6 +250,11 @@ const Preview = forwardRef(function Preview({ mesh, meshes, color, colors, spin 
     if (!s) return;
     for (const [region, entry] of s.parts) entry.obj.material.color.set(colorOf(region));
   }, [color, colors]);
+
+  // Flash the part that was just picked so it's clear what changed.
+  useEffect(() => {
+    if (st.current && selected) st.current.flash = { region: selected.region, t0: performance.now() };
+  }, [selected]);
 
   useImperativeHandle(ref, () => ({
     reframe: () => {

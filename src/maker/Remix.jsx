@@ -25,17 +25,30 @@ function readSettings() {
   }
 }
 
-const blankCredit = () => ({ store: "", license: "unknown", designer: "", link: "" });
+const blankCredit = () => ({
+  store: "",
+  license: "unknown",
+  designer: "",
+  link: "",
+});
 
 export default function Remix() {
   const saved = useMemo(readSettings, []);
   const [file, setFile] = useState(null); // { name, importId, kind, size }
   const [loading, setLoading] = useState("");
   const [values, setValues] = useState(saved?.values || remixDefaults());
-  const [colors, setColors] = useState(saved?.colors || { model: COLORS[8].value, stand: COLORS[0].value, name: COLORS[1].value });
+  const [colors, setColors] = useState(
+    saved?.colors || {
+      model: COLORS[8].value,
+      stand: COLORS[0].value,
+      name: COLORS[1].value,
+    },
+  );
   const [credit, setCredit] = useState(saved?.credit || blankCredit());
   const [history, setHistory] = useState([]);
   const [tab, setTab] = useState("Size");
+  const [part, setPart] = useState(undefined);
+  const [picked, setPicked] = useState(null);
   const [spin, setSpin] = useState(true);
   const [over, setOver] = useState(false);
   const [panel, setPanel] = useState(null);
@@ -68,8 +81,13 @@ export default function Remix() {
     setLoading(`Opening ${name}…`);
     try {
       const importId = `rx${Date.now().toString(36)}`;
-      const info = await cad("import", { id: importId, name, bytes: bytes.slice(0) });
+      const info = await cad("import", {
+        id: importId,
+        name,
+        bytes: bytes.slice(0),
+      });
       setFile({ name, importId, kind: info.kind, size: info.size });
+      if (info.repaired) setToast("This model had gaps, so we filled them in to make it printable. Check the details look right.");
       if (fresh) {
         setValues(remixDefaults());
         setHistory([]);
@@ -82,17 +100,66 @@ export default function Remix() {
       setToast(
         /manifold/i.test(e.message)
           ? `${name} has gaps or overlapping pieces, so it can't be printed as is. Models made for 3D printing work best.`
-          : `Couldn't open ${name}: ${e.message}`
+          : `Couldn't open ${name}: ${e.message}`,
       );
     } finally {
       setLoading("");
     }
   }, []);
 
-  // Pick up where the last visit left off.
+  // A model picked in the gallery (?sf= Sketchfab, ?si= Smithsonian) loads
+  // straight in; otherwise pick up where the last visit left off.
+  const [signIn, setSignIn] = useState(null);
   useEffect(() => {
-    loadRemix().then((entry) => entry && bring(entry.name, entry.bytes, { fresh: false }));
+    const q = new URLSearchParams(window.location.search);
+    const sf = q.get("sf");
+    const si = q.get("si");
+    window.history.replaceState(null, "", "/upload");
+    try {
+      const notice = sessionStorage.getItem("layerlab:notice");
+      if (notice) {
+        sessionStorage.removeItem("layerlab:notice");
+        setToast(notice);
+      }
+    } catch {
+      /* no notice */
+    }
+    if (!sf && !si) {
+      loadRemix().then((entry) => entry && bring(entry.name, entry.bytes, { fresh: false }));
+      return;
+    }
+    (async () => {
+      try {
+        let got;
+        if (sf) {
+          const { downloadSketchfab } = await import("../sketchfabAuth.js");
+          got = await downloadSketchfab(sf, setLoading);
+        } else {
+          const { isSmithsonianFile } = await import("../smithsonian.js");
+          if (!isSmithsonianFile(si)) throw new Error("That link isn't a Smithsonian model.");
+          setLoading("Downloading from the Smithsonian…");
+          const r = await fetch(si);
+          if (!r.ok) throw new Error("The download didn't finish.");
+          got = { name: decodeURIComponent(si.split("/").pop()), bytes: await r.arrayBuffer() };
+        }
+        setLoading("Getting it ready to print…");
+        const conv = await import("./convert.js");
+        if (got.gltfFiles) got = await conv.gltfFilesToSTL(got.gltfFiles);
+        else if (conv.NEEDS_CONVERT.test(got.name)) got = await conv.toSTL(got.name, got.bytes);
+        bring(got.name, got.bytes);
+      } catch (e) {
+        setLoading("");
+        if (e.signIn) setSignIn(sf);
+        setToast(e.message);
+      }
+    })();
   }, [bring]);
+
+  const sketchfabAgain = async (uid) => {
+    const { siteConfig, signInSketchfab } = await import("../sketchfabAuth.js");
+    const cfg = await siteConfig();
+    if (cfg.sketchfabClientId) signInSketchfab(cfg.sketchfabClientId, `/upload?sf=${encodeURIComponent(uid)}`);
+  };
 
   const openFiles = async (list, credit) => {
     const f = [...list].find((x) => TYPES.test(x.name));
@@ -113,11 +180,18 @@ export default function Remix() {
   };
 
   const fromAi = (name, bytes, prompt) =>
-    openFiles([new File([bytes], name)], { store: "", license: "store", designer: `Meshy AI: “${prompt}”`, link: "https://www.meshy.ai/" });
+    openFiles([new File([bytes], name)], {
+      store: "",
+      license: "store",
+      designer: `Meshy AI: “${prompt}”`,
+      link: "https://www.meshy.ai/",
+    });
 
   const trySample = async () => {
     const res = await fetch("/samples/rocket.stl");
-    bring("rocket.stl", await res.arrayBuffer(), { newCredit: { store: "", license: "cc0", designer: SITE.name, link: "" } });
+    bring("rocket.stl", await res.arrayBuffer(), {
+      newCredit: { store: "", license: "cc0", designer: SITE.name, link: "" },
+    });
   };
 
   const closeFile = () => {
@@ -145,7 +219,7 @@ export default function Remix() {
     if (!file) return;
     remember();
     const big = Math.max(...file.size);
-    const pct = Math.floor(((Math.min(BUILD_VOLUME.x, BUILD_VOLUME.z) * 0.9) / big) * 100 / 5) * 5;
+    const pct = Math.floor((((Math.min(BUILD_VOLUME.x, BUILD_VOLUME.z) * 0.9) / big) * 100) / 5) * 5;
     setValues((v) => ({ ...v, size: Math.max(10, Math.min(400, pct)) }));
   };
 
@@ -159,10 +233,18 @@ export default function Remix() {
       setToast("Getting your file ready…");
       if (colorCount > 1) {
         const { groups, holes } = colorGroups(parts, REMIX_REGIONS, colors);
-        const { bytes } = await cad("exportColor", { groups, holes, title: baseName });
+        const { bytes } = await cad("exportColor", {
+          groups,
+          holes,
+          title: baseName,
+        });
         download(`${baseName}-remix.3mf`, bytes, "model/3mf");
       } else {
-        const { bytes } = await cad("export", { objects: parts, format: "stl", fast: true });
+        const { bytes } = await cad("export", {
+          objects: parts,
+          format: "stl",
+          fast: true,
+        });
         download(`${baseName}-remix.stl`, bytes, "application/octet-stream");
       }
       setToast("Saved! Check your downloads.");
@@ -172,6 +254,16 @@ export default function Remix() {
   };
 
   const options = REMIX_OPTIONS.filter((op) => op.group === tab);
+  const paint = (c) => {
+    remember();
+    setColors(c);
+  };
+  const pickPart = (region) => {
+    setTab(region === "model" ? "Size" : "Stand");
+    setPart(region);
+    setPicked({ region });
+    setSpin(false);
+  };
 
   return (
     <div
@@ -187,14 +279,28 @@ export default function Remix() {
         openFiles(e.dataTransfer.files);
       }}
     >
-      <Header active="/make" />
-      <input ref={picker} type="file" accept=".stl,.3mf,.step,.stp,.glb,.gltf,.obj" hidden onChange={(e) => e.target.files.length && openFiles(e.target.files)} />
+      <Header active="/upload" />
+      <input
+        ref={picker}
+        type="file"
+        accept=".stl,.3mf,.step,.stp,.glb,.gltf,.obj"
+        hidden
+        onChange={(e) => e.target.files.length && openFiles(e.target.files)}
+      />
       <div className="mk-grid rx-grid">
         <section className="mk-stage">
-          <div className="mk-view">
+          <div className={`mk-view ${file ? "" : "empty"}`}>
             {file ? (
               <>
-                <Preview ref={previewRef} meshes={meshes} colors={colors} spin={spin} onSpinStop={() => setSpin(false)} />
+                <Preview
+                  ref={previewRef}
+                  meshes={meshes}
+                  colors={colors}
+                  spin={spin}
+                  onSpinStop={() => setSpin(false)}
+                  onPick={regions.length > 1 ? pickPart : null}
+                  selected={picked}
+                />
                 {status === "warming" && (
                   <div className="mk-loading">
                     <div className="mk-spark" />
@@ -213,19 +319,43 @@ export default function Remix() {
               </>
             ) : (
               <div className={`rx-drop ${over ? "over" : ""}`}>
-                <div className="rx-icon" aria-hidden="true">
-                  ↓
-                </div>
-                <h2>{loading || "Drop a model here"}</h2>
-                <p>Bring a .stl, .3mf, .step, .glb or .obj file you downloaded from Sketchfab, Printables, MakerWorld, Thingiverse or anywhere else.</p>
-                <div className="row-ctas">
-                  <button className="btn dark" onClick={() => picker.current?.click()}>
-                    Choose a file
-                  </button>
-                  <button className="btn" onClick={trySample}>
-                    Try a sample rocket
-                  </button>
-                </div>
+                {loading ? (
+                  <>
+                    <div className="mk-spark" />
+                    <h2>{loading}</h2>
+                  </>
+                ) : (
+                  <>
+                    <button className="rx-upload" onClick={() => picker.current?.click()}>
+                      <svg viewBox="0 0 24 24" aria-hidden="true">
+                        <path
+                          d="M12 16V4m0 0l-5 5m5-5l5 5M5 20h14"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="2.2"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        />
+                      </svg>
+                      Upload
+                    </button>
+                    <h2 className="rx-question">Already have a model?</h2>
+                    <p>
+                      Drop it here or tap Upload. A .stl, .3mf, .step, .glb or .obj from Sketchfab, Printables, MakerWorld, Thingiverse or
+                      anywhere else.
+                    </p>
+                    <div className="row-ctas">
+                      {signIn && (
+                        <button className="btn primary" onClick={() => sketchfabAgain(signIn)}>
+                          Sign in with Sketchfab
+                        </button>
+                      )}
+                      <button className="btn" onClick={trySample}>
+                        Try a sample rocket
+                      </button>
+                    </div>
+                  </>
+                )}
                 <p className="fine">
                   Need a model? <a href="/discover">Search the mall</a>. Files stay on your device until you order.
                 </p>
@@ -263,9 +393,9 @@ export default function Remix() {
           )}
         </section>
 
-        <section className="mk-panel" aria-label="Remix it">
+        <section className="mk-panel" aria-label="Change your model">
           <div className="mk-panel-head">
-            <h2>Remix</h2>
+            <h2>Your model</h2>
             <p>Make a model from any site your own: size, turn, color and a name stand.</p>
           </div>
           {file ? (
@@ -283,19 +413,25 @@ export default function Remix() {
                 ))}
               </div>
               <div className="mk-controls" role="tabpanel">
-                {tab === "Colors" && (
+                {tab === "Colors" && <RegionColors regions={regions} colors={colors} onChange={paint} active={part} onActive={setPart} />}
+                {tab === "Stand" && regions.some((r) => r.id !== "model") && (
                   <RegionColors
-                    regions={regions}
+                    compact
+                    regions={regions.filter((r) => r.id !== "model")}
                     colors={colors}
-                    onChange={(c) => {
-                      remember();
-                      setColors(c);
-                    }}
+                    onChange={paint}
+                    active={part}
+                    onActive={setPart}
                   />
+                )}
+                {tab === "Size" && (
+                  <RegionColors compact regions={regions.filter((r) => r.id === "model")} colors={colors} onChange={paint} />
                 )}
                 {tab === "License" && <CreditForm credit={credit} setCredit={setCredit} />}
                 {tab === "Stand" && !license.canEdit && (
-                  <p className="rx-locked">This model's license ({license.tag}) says no changes, so the stand is off. Size and color still work.</p>
+                  <p className="rx-locked">
+                    This model's license ({license.tag}) says no changes, so the stand is off. Size and color still work.
+                  </p>
                 )}
                 {tab === "Size" && file.size && (
                   <p className="mk-hint">
@@ -309,7 +445,9 @@ export default function Remix() {
                   <Control key={op.id} op={op} value={values[op.id]} onChange={setValue} />
                 ))}
               </div>
-              <div className={`rx-license ${license.tone === "good" ? "lic-flag good" : license.tone === "warn" ? "lic-flag warn" : "lic-flag bad"}`}>
+              <div
+                className={`rx-license ${license.tone === "good" ? "lic-flag good" : license.tone === "warn" ? "lic-flag warn" : "lic-flag bad"}`}
+              >
                 <strong>
                   License: {license.tag === "?" ? "not set" : `${license.tag} · ${license.name}`}
                   {credit.designer ? ` · by ${credit.designer}` : ""}
@@ -353,7 +491,7 @@ export default function Remix() {
               <ol className="rx-how">
                 <li>Find a model in the mall and check its license.</li>
                 <li>Download the .stl or .3mf file.</li>
-                <li>Drop it on the left, then change the size, turn it flat, pick a color and add a name stand.</li>
+                <li>Tap Upload (or drop it in), then change the size, turn it flat, pick a color and add a name stand.</li>
               </ol>
               <a className="btn lime" href="/discover">
                 Search the mall
@@ -364,7 +502,13 @@ export default function Remix() {
       </div>
 
       {panel === "order" && (
-        <div className="mk-modal" role="dialog" aria-modal="true" aria-labelledby="order-title" onClick={(e) => e.target === e.currentTarget && setPanel(null)}>
+        <div
+          className="mk-modal"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="order-title"
+          onClick={(e) => e.target === e.currentTarget && setPanel(null)}
+        >
           <div className="mk-modal-card">
             <h2 id="order-title">Order your remix</h2>
             <dl>
@@ -419,7 +563,11 @@ export default function Remix() {
           </div>
         </div>
       )}
-      {toast && <div className="mk-toast" role="status">{toast}</div>}
+      {toast && (
+        <div className="mk-toast" role="status">
+          {toast}
+        </div>
+      )}
     </div>
   );
 }
@@ -429,7 +577,17 @@ export default function Remix() {
 function tripCredit() {
   const t = lastTrip();
   if (!t || Date.now() - t.at > 3 * 3600 * 1000) return blankCredit();
-  return { ...blankCredit(), store: t.store, ...(t.model ? { license: t.model.license, designer: t.model.designer, link: t.model.link } : {}) };
+  return {
+    ...blankCredit(),
+    store: t.store,
+    ...(t.model
+      ? {
+          license: t.model.license,
+          designer: t.model.designer,
+          link: t.model.link,
+        }
+      : {}),
+  };
 }
 
 function CreditForm({ credit, setCredit }) {
@@ -442,7 +600,13 @@ function CreditForm({ credit, setCredit }) {
         <span className="mk-label">Where's it from?</span>
         <div className="mk-choices">
           {STORES.map((s) => (
-            <button key={s.id} role="radio" aria-checked={credit.store === s.id} className={credit.store === s.id ? "on" : ""} onClick={() => set("store", s.id)}>
+            <button
+              key={s.id}
+              role="radio"
+              aria-checked={credit.store === s.id}
+              className={credit.store === s.id ? "on" : ""}
+              onClick={() => set("store", s.id)}
+            >
               {s.name}
             </button>
           ))}
@@ -456,7 +620,14 @@ function CreditForm({ credit, setCredit }) {
         <span className="mk-label">License on the model's page</span>
         <div className="mk-choices">
           {LICENSES.map((l) => (
-            <button key={l.id} role="radio" aria-checked={credit.license === l.id} className={credit.license === l.id ? "on" : ""} onClick={() => set("license", l.id)} title={l.name}>
+            <button
+              key={l.id}
+              role="radio"
+              aria-checked={credit.license === l.id}
+              className={credit.license === l.id ? "on" : ""}
+              onClick={() => set("license", l.id)}
+              title={l.name}
+            >
               {l.tag === "?" ? "Not sure" : l.tag}
             </button>
           ))}
@@ -467,13 +638,30 @@ function CreditForm({ credit, setCredit }) {
         <label className="mk-label" htmlFor="rx-designer">
           Designer
         </label>
-        <input id="rx-designer" className="mk-text small" value={credit.designer} maxLength={60} onChange={(e) => set("designer", e.target.value)} placeholder="Who made it?" autoComplete="off" />
+        <input
+          id="rx-designer"
+          className="mk-text small"
+          value={credit.designer}
+          maxLength={60}
+          onChange={(e) => set("designer", e.target.value)}
+          placeholder="Who made it?"
+          autoComplete="off"
+        />
       </div>
       <div className="mk-field">
         <label className="mk-label" htmlFor="rx-link">
           Link to the model
         </label>
-        <input id="rx-link" className="mk-text small" value={credit.link} maxLength={300} onChange={(e) => set("link", e.target.value)} placeholder="https://…" autoComplete="off" inputMode="url" />
+        <input
+          id="rx-link"
+          className="mk-text small"
+          value={credit.link}
+          maxLength={300}
+          onChange={(e) => set("link", e.target.value)}
+          placeholder="https://…"
+          autoComplete="off"
+          inputMode="url"
+        />
       </div>
     </>
   );

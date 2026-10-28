@@ -30,7 +30,9 @@ export default async function handler(req, res) {
   if (req.method === "GET" && !id) return res.status(200).json({ enabled: true, daily: DAILY });
 
   if (req.method === "POST") {
-    const prompt = String(req.body?.prompt || "").replace(/\s+/g, " ").trim();
+    const prompt = String(req.body?.prompt || "")
+      .replace(/\s+/g, " ")
+      .trim();
     if (prompt.length < 3 || prompt.length > 200) return res.status(400).json({ error: "Describe it in 3 to 200 characters." });
     if (ADULT.test(prompt)) return res.status(400).json({ error: "Let's keep it family friendly. Try describing something else." });
     if ((await madeToday()) >= DAILY) return res.status(429).json({ error: "We've hit today's limit for AI models. Try again tomorrow." });

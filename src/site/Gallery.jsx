@@ -1,43 +1,56 @@
 // The model gallery: LayerLab's own models and live Sketchfab models in one
 // grid, with a viewer that opens right on the page.
 import { useEffect, useMemo, useRef, useState } from "react";
-import { searchSketchfab, embedSrc } from "../sketchfab.js";
+import { embedSrc } from "../sketchfab.js";
+import { liveSources, searchSource, SOURCE_INFO } from "../sources.js";
+import { siteConfig, sketchfabToken, signInSketchfab } from "../sketchfabAuth.js";
 import { ourMatches, TOPICS } from "../gallery.js";
 import { LICENSE_BY_ID, rememberTrip } from "../stores.js";
 
-// Our items first, then live results; "more" loads the next page.
+// Our items first, then live results from every source; "more" loads the
+// next page from each source that has one.
 export function useExplore(q, topic) {
-  const [live, setLive] = useState([]);
-  const [next, setNext] = useState(null);
-  const [state, setState] = useState("idle"); // idle | loading | error
+  const [bySource, setBySource] = useState({}); // id -> { items, next, state }
+  const [sources, setSources] = useState(["sketchfab", "smithsonian"]);
   const query = (q || topic?.q || "").trim();
   useEffect(() => {
+    let alive = true;
+    liveSources().then((s) => alive && setSources(s));
+    return () => {
+      alive = false;
+    };
+  }, []);
+  useEffect(() => {
     const ctl = new AbortController();
-    setState("loading");
-    setLive([]);
-    searchSketchfab(query, { signal: ctl.signal })
-      .then((r) => {
-        setLive(r.items);
-        setNext(r.next);
-        setState("idle");
-      })
-      .catch((e) => e.name !== "AbortError" && setState("error"));
+    setBySource(Object.fromEntries(sources.map((id) => [id, { items: [], next: null, state: "loading" }])));
+    for (const id of sources) {
+      searchSource(id, query, { signal: ctl.signal })
+        .then((r) => setBySource((b) => ({ ...b, [id]: { items: r.items, next: r.next, state: "idle" } })))
+        .catch((e) => e.name !== "AbortError" && setBySource((b) => ({ ...b, [id]: { items: [], next: null, state: "error" } })));
+    }
     return () => ctl.abort();
-  }, [query]);
+  }, [query, sources]);
   const ours = useMemo(() => ourMatches(q, topic), [q, topic]);
-  const more = async () => {
-    if (!next) return;
-    setState("loading");
-    try {
-      const r = await searchSketchfab(query, { next });
-      setLive((l) => [...l, ...r.items]);
-      setNext(r.next);
-      setState("idle");
-    } catch {
-      setState("error");
+  const more = async (only) => {
+    const ids = sources.filter((id) => bySource[id]?.next && (!only || only === id));
+    for (const id of ids) {
+      setBySource((b) => ({ ...b, [id]: { ...b[id], state: "loading" } }));
+      searchSource(id, query, { next: bySource[id].next })
+        .then((r) => setBySource((b) => ({ ...b, [id]: { items: [...b[id].items, ...r.items], next: r.next, state: "idle" } })))
+        .catch(() => setBySource((b) => ({ ...b, [id]: { ...b[id], next: null, state: "idle" } })));
     }
   };
-  return { ours, live, more: next ? more : null, state };
+  // Take turns between sources so one store doesn't fill the whole page.
+  const pick = (only) => {
+    const lists = sources.filter((id) => !only || only === id).map((id) => bySource[id]?.items || []);
+    const out = [];
+    for (let i = 0; lists.some((l) => i < l.length); i++) for (const l of lists) if (i < l.length) out.push(l[i]);
+    return out;
+  };
+  const states = sources.map((id) => bySource[id]?.state);
+  const state = states.every((x) => x === "error") ? "error" : states.includes("loading") ? "loading" : "idle";
+  const hasMore = sources.some((id) => bySource[id]?.next);
+  return { ours, live: pick(), pick, sources, bySource, more: hasMore ? more : null, state };
 }
 
 export function SearchBox({ value, onChange, onSubmit, big, placeholder = "Search dragons, planters, phone stands…" }) {
@@ -87,7 +100,7 @@ export function ModelCard({ item, onOpen }) {
     <>
       <div className="mcard-img">
         {item.image ? <img src={item.image} alt="" loading="lazy" /> : <span className="noimg" />}
-        <span className={`src ${item.source}`}>{ours ? "LayerLab" : "Sketchfab"}</span>
+        <span className={`src ${item.source}`}>{SOURCE_INFO[item.source]?.name || item.source}</span>
         {ours ? <span className="lchip good">Customize</span> : <LicenseChip id={item.license} />}
       </div>
       <div className="mcard-body">
@@ -130,11 +143,11 @@ export function ModelGrid({ ours, live, state, more, onOpen, empty }) {
         ))}
         {state === "loading" && Array.from({ length: items.length ? 4 : 12 }, (_, i) => <div key={`sk${i}`} className="mcard skeleton" />)}
       </div>
-      {state === "error" && <p className="grid-note">Couldn't reach Sketchfab right now. Our own models still work.</p>}
+      {state === "error" && <p className="grid-note">Couldn't reach the other stores right now. Our own models still work.</p>}
       {state === "idle" && !items.length && <p className="grid-note">{empty || "Nothing found. Try another word."}</p>}
       {more && state !== "loading" && (
         <div className="grid-more">
-          <button className="btn" onClick={more}>
+          <button className="btn" onClick={() => more()}>
             Show more
           </button>
         </div>
@@ -154,11 +167,31 @@ export function ModelModal({ item, onClose }) {
     ref.current?.focus();
     return () => window.removeEventListener("keydown", esc);
   }, [item, onClose]);
+  const [cfg, setCfg] = useState({});
+  useEffect(() => {
+    siteConfig().then(setCfg);
+  }, []);
   if (!item) return null;
   const ours = item.source === "layerlab";
+  const info = SOURCE_INFO[item.source] || { name: item.source };
+  const credit = { license: item.license, designer: item.by, link: item.url, title: item.title };
+  const direct = item.source === "smithsonian" && !!item.download;
+  const sfReady = item.source === "sketchfab" && !!cfg.sketchfabClientId;
+  const openHere = () => {
+    rememberTrip(item.source, "", credit);
+    if (direct) window.location.href = `/upload?si=${encodeURIComponent(item.download)}`;
+    else if (sketchfabToken()) window.location.href = `/upload?sf=${encodeURIComponent(item.uid)}`;
+    else signInSketchfab(cfg.sketchfabClientId, `/upload?sf=${encodeURIComponent(item.uid)}`);
+  };
   const lic = LICENSE_BY_ID[item.license] || LICENSE_BY_ID.unknown;
   return (
-    <div className="mmodal" role="dialog" aria-modal="true" aria-label={item.title} onClick={(e) => e.target === e.currentTarget && onClose()}>
+    <div
+      className="mmodal"
+      role="dialog"
+      aria-modal="true"
+      aria-label={item.title}
+      onClick={(e) => e.target === e.currentTarget && onClose()}
+    >
       <div className="mmodal-card" tabIndex={-1} ref={ref}>
         <button className="mmodal-x" onClick={onClose} aria-label="Close">
           ×
@@ -168,12 +201,21 @@ export function ModelModal({ item, onClose }) {
             <div className="mmodal-pic" style={{ "--tint": item.tint }}>
               <img src={item.image} alt="" />
             </div>
+          ) : item.embedUrl ? (
+            <iframe
+              title={item.title}
+              src={item.source === "sketchfab" ? embedSrc(item) : item.embedUrl}
+              allow="autoplay; fullscreen; xr-spatial-tracking"
+              allowFullScreen
+            />
           ) : (
-            <iframe title={item.title} src={embedSrc(item)} allow="autoplay; fullscreen; xr-spatial-tracking" allowFullScreen />
+            <div className="mmodal-pic">
+              <img src={item.image} alt="" />
+            </div>
           )}
         </div>
         <div className="mmodal-info">
-          <span className={`src ${item.source}`}>{ours ? "LayerLab original" : "From Sketchfab"}</span>
+          <span className={`src ${item.source}`}>{ours ? "LayerLab original" : `From ${info.name}`}</span>
           <h2>{item.title}</h2>
           <p className="by">
             {ours ? (
@@ -202,26 +244,46 @@ export function ModelModal({ item, onClose }) {
                 </strong>
                 <span>{lic.ok}</span>
               </div>
-              <ol className="steps">
-                <li>
-                  <a
-                    className="btn primary"
-                    href={item.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    onClick={() => rememberTrip("sketchfab", "", { license: item.license, designer: item.by, link: item.url, title: item.title })}
-                  >
-                    Download on Sketchfab ↗
+              {direct || sfReady ? (
+                <div className="open-here">
+                  <button className="btn primary big" onClick={openHere}>
+                    Open it in LayerLab
+                  </button>
+                  <span>
+                    {direct
+                      ? "Free to use. It loads right into the builder to resize, recolor and print."
+                      : sketchfabToken()
+                        ? "Loads right into the builder from your Sketchfab account."
+                        : "You'll sign in with Sketchfab once (free account), then it loads right into the builder."}
+                  </span>
+                  <a className="linkish" href={item.url} target="_blank" rel="noopener noreferrer">
+                    View on {info.name} ↗
                   </a>
-                  <span>Free account needed. Pick the .stl or .glb file if offered.</span>
-                </li>
-                <li>
-                  <a className="btn" href="/remix">
-                    Remix it here →
-                  </a>
-                  <span>Drop the file in to resize it, recolor it and add a name stand. We fill in the license for you.</span>
-                </li>
-              </ol>
+                </div>
+              ) : (
+                <ol className="steps">
+                  <li>
+                    <a
+                      className="btn primary"
+                      href={item.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      onClick={() => rememberTrip(item.source, "", credit)}
+                    >
+                      Download on {info.name} ↗
+                    </a>
+                    <span>Free account needed. Pick the .stl, .3mf or .glb file if offered.</span>
+                  </li>
+                  <li>
+                    <a className="btn" href="/upload">
+                      Upload
+                    </a>
+                    <span>
+                      Already have it? Upload the file to resize it, recolor it and add a name stand. We fill in the license for you.
+                    </span>
+                  </li>
+                </ol>
+              )}
             </>
           )}
         </div>

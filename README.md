@@ -46,6 +46,13 @@ Built on the ProtoLab CAD engine (replicad/OpenCascade + Manifold, in a web work
 
 `api/meshy.js` is a Vercel function that calls Meshy's text-to-3D API. Set `MESHY_API_KEY` (and optionally `MESHY_DAILY_LIMIT`, default 25) in the Vercel project's environment variables. Without the key the "Describe it" box on /remix stays hidden. Prompts go through the same family filter as Sketchfab results, and Meshy's own moderation is on.
 
+## Model sources and sign-in
+
+- Sketchfab and the Smithsonian (CC0 museum scans) are searched from the browser. Smithsonian models open straight in the upload page.
+- "Sign in with Sketchfab" lets Sketchfab models load straight into the builder. Register an app at Sketchfab (implicit grant, redirect URI `https://layerlab.blueprintwebstudio.com/auth/sketchfab`), then set `SKETCHFAB_CLIENT_ID` in Vercel. Until then the button stays hidden.
+- Thingiverse and MyMiniFactory show in Explore once `THINGIVERSE_TOKEN` or `MYMINIFACTORY_KEY` is set (searched through `api/search.js` so the keys stay private).
+- Models that aren't watertight get repaired on import (`src/cad/repair.js`): weld first, then rebuild as a solid if needed.
+
 ## Develop
 
 ```bash

@@ -62,6 +62,17 @@ export function meshObject(obj) {
   return toBuffers(shape.mesh(MESH_OPTS));
 }
 
+// Imports an .stl, repairing it if it isn't watertight.
+async function stlMesh(blob, bytes) {
+  try {
+    return { shape: await R.importSTLAsMesh(blob) };
+  } catch {
+    const { repairMesh } = await import("./repair.js");
+    const m = repairMesh(bytes instanceof ArrayBuffer ? bytes : bytes.buffer, R.getManifold());
+    return { shape: new R.MeshShape(m), repaired: true };
+  }
+}
+
 export async function importFile(id, name, bytes) {
   const lower = name.toLowerCase();
   const blob = new Blob([bytes]);
@@ -69,7 +80,8 @@ export async function importFile(id, name, bytes) {
   if (lower.endsWith(".step") || lower.endsWith(".stp")) {
     entry = { kind: "solid", shape: centered(await R.importSTEP(blob)) };
   } else if (lower.endsWith(".stl")) {
-    entry = { kind: "mesh", shape: centered(await R.importSTLAsMesh(blob)) };
+    const { shape, repaired } = await stlMesh(blob, bytes);
+    entry = { kind: "mesh", shape: centered(shape), repaired };
   } else if (lower.endsWith(".3mf")) {
     const stl = readThreeMF(bytes);
     entry = { kind: "mesh", shape: centered(await R.importSTLAsMesh(new Blob([stl]))) };
@@ -79,7 +91,7 @@ export async function importFile(id, name, bytes) {
   if (entry.kind === "mesh" && entry.shape.isEmpty) throw new Error("That file has no printable geometry.");
   imports.set(id, entry);
   const [min, max] = entry.shape.boundingBox.bounds;
-  return { kind: entry.kind, size: max.map((v, i) => v - min[i]) };
+  return { kind: entry.kind, size: max.map((v, i) => v - min[i]), repaired: !!entry.repaired };
 }
 
 function free(shape) {
