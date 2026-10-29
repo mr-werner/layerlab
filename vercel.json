@@ -8,7 +8,9 @@
     { "source": "/upload", "destination": "/index.html" },
     { "source": "/auth/sketchfab", "destination": "/index.html" },
     { "source": "/studio", "destination": "/index.html" },
-    { "source": "/build", "destination": "/index.html" }
+    { "source": "/build", "destination": "/index.html" },
+    { "source": "/apps", "destination": "/index.html" },
+    { "source": "/tools", "destination": "/index.html" }
   ],
   "headers": [
     {
