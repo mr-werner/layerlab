@@ -7,6 +7,9 @@ const fs = require("fs");
 const { execFileSync } = require("child_process");
 const base = process.env.BASE || "http://localhost:4173";
 const only = process.argv[2];
+// OPTS=hair,hat renders only those options; VALS=afro,cap only those choices.
+const opts = process.env.OPTS?.split(",");
+const vals = process.env.VALS?.split(",");
 
 (async () => {
   const { KITS, defaultValues } = await import(path.resolve(__dirname, "../src/kits.js"));
@@ -23,15 +26,17 @@ const only = process.argv[2];
     const out = path.resolve(__dirname, `../public/opts/${kit.id}`);
     fs.mkdirSync(out, { recursive: true });
     for (const op of kit.options) {
-      if (op.type !== "choice" || op.id === "font") continue;
+      if (op.type !== "choice" || op.id === "font" || (opts && !opts.includes(op.id))) continue;
       const a = art[op.id] || {};
       for (const c of op.choices) {
+        if (vals && !vals.includes(c.value)) continue;
         const v = { ...defaultValues(kit), ...(a.set || {}), [op.id]: c.value };
         const q = new URLSearchParams({ kit: kit.id, v: JSON.stringify(v), shot: "1" });
         if (a.angle) q.set("angle", a.angle);
         if (a.focus) q.set("focus", a.focus.join(","));
         if (a.min) q.set("min", a.min);
         if (a.hl) q.set("hl", a.hl.join(","));
+        if (a.parts) q.set("parts", a.parts.join(","));
         await page.goto(`${base}/make?${q}`);
         try {
           await page.waitForSelector("#shot-ready", { state: "attached", timeout: 90000 });
@@ -42,7 +47,12 @@ const only = process.argv[2];
         await page.waitForTimeout(250);
         const png = path.join(tmp, "o.png");
         await page.locator(".shot").screenshot({ path: png, omitBackground: true });
-        execFileSync("python3", ["-c", "import sys;from PIL import Image;im=Image.open(sys.argv[1]);im.resize((192,192),Image.LANCZOS).save(sys.argv[2],'WEBP',quality=82)", png, path.join(out, `${op.id}-${c.value}.webp`)]);
+        execFileSync("python3", [
+          "-c",
+          "import sys;from PIL import Image;im=Image.open(sys.argv[1]);im.resize((192,192),Image.LANCZOS).save(sys.argv[2],'WEBP',quality=82)",
+          png,
+          path.join(out, `${op.id}-${c.value}.webp`),
+        ]);
         manifest[`${kit.id}/${op.id}/${c.value}`] = 1;
         console.log("opt", kit.id, op.id, c.value);
       }

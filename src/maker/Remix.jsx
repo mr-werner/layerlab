@@ -355,8 +355,12 @@ export default function Remix() {
                     </button>
                     <h2 className="rx-question">Already have a model?</h2>
                     <p>
-                      Drop it here or tap Upload. A .stl, .3mf, .step, .glb or .obj from Sketchfab, Printables, MakerWorld, Thingiverse or
-                      anywhere else.
+                      Drop it here or tap Upload. A .stl, .3mf, .step, .glb or .obj from Sketchfab, Printables, MakerWorld, CGTrader,
+                      Thingiverse or anywhere else. Want bigger changes first? Try one of these{" "}
+                      <a className="linkish" href="/apps">
+                        free editing apps
+                      </a>
+                      .
                     </p>
                     <div className="row-ctas">
                       {signIn && (

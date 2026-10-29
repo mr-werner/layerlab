@@ -63,7 +63,11 @@ export default function Discover() {
           <h2 className="sec-title">{label ? `“${label}” in other stores` : "More stores"}</h2>
           <p>
             These stores don't let other sites show their models, so these open in a new tab. Download the file, then drop it in the
-            remixer.
+            remixer. Need bigger changes? See these{" "}
+            <a className="linkish" href="/apps">
+              free editing apps
+            </a>
+            .
           </p>
         </div>
         <div className="store-row">

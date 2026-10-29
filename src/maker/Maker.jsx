@@ -61,6 +61,9 @@ function readShot() {
     focus: q.get("focus") ? q.get("focus").split(",") : null,
     min: Number(q.get("min") || 0),
     hl: q.get("hl") ? q.get("hl").split(",") : null,
+    // Parts named here are lit up on their own, for things like the nose
+    // that share a color with the face.
+    parts: q.get("parts") ? q.get("parts").split(",") : null,
   };
 }
 
@@ -90,7 +93,11 @@ export default function Maker() {
     setTabOnly(g);
     setSub(s || subsOf(g)[0] || null);
   };
-  const parts = useMemo(() => buildKit(kit, values), [kit, values]);
+  const parts = useMemo(() => {
+    const list = buildKit(kit, values);
+    const lit = shotOpts?.parts;
+    return lit ? list.map((p) => (lit.includes(p.name) ? { ...p, region: "hl" } : p)) : list;
+  }, [kit, values, shotOpts]);
 
   const { meshes, size, status, error } = useBuild(parts);
 
@@ -166,7 +173,6 @@ export default function Maker() {
     const cs = defaultColors(kit, COLORS[4].value);
     for (const [r, c] of Object.entries(look.colors || {})) if (r in cs) cs[r] = c;
     setColors(cs);
-    setSpin(true);
   };
 
   const pickKit = (k) => {
@@ -269,7 +275,11 @@ export default function Maker() {
         <Preview
           ref={previewRef}
           meshes={meshes}
-          colors={shotOpts.hl ? Object.fromEntries(regions.map((r) => [r.id, shotOpts.hl.includes(r.id) ? "#7a66ff" : "#d8d4cc"])) : colors}
+          colors={
+            shotOpts.hl
+              ? { ...Object.fromEntries(regions.map((r) => [r.id, shotOpts.hl.includes(r.id) ? "#7a66ff" : "#d8d4cc"])), hl: "#7a66ff" }
+              : colors
+          }
           spin={false}
           angle={shotOpts.angle}
           focus={shotOpts.focus}
@@ -342,6 +352,7 @@ export default function Maker() {
               selected={picked}
               compare={compare}
               mode={viewMode}
+              steady={kit.id}
             />
             {status === "warming" && (
               <div className="mk-loading">

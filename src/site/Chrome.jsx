@@ -49,7 +49,14 @@ export function Header({ active, search = true }) {
         ))}
         <a className={`nav-upload ${active === "/upload" ? "on" : ""}`} href="/upload" title="Already have a model?">
           <svg viewBox="0 0 24 24" aria-hidden="true">
-            <path d="M12 16V4m0 0l-5 5m5-5l5 5M5 20h14" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
+            <path
+              d="M12 16V4m0 0l-5 5m5-5l5 5M5 20h14"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2.2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
           </svg>
           Upload
         </a>
@@ -76,6 +83,7 @@ export function Footer() {
         <a href="/make?kit=figure">Figure builder</a>
         <a href="/make">Create</a>
         <a href="/upload">Upload a model</a>
+        <a href="/apps">Free editing apps</a>
         <a href="/shop">Shop</a>
         <a href="/studio">Studio</a>
       </nav>

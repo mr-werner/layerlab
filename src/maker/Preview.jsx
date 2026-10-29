@@ -25,6 +25,10 @@ const Preview = forwardRef(function Preview(
     selected,
     compare = "none",
     mode = "turn",
+    // A key (the kit id) that keeps the view still while the model is edited:
+    // the model stays where it is and the camera only refits when the key
+    // changes, on Recenter, or when the model no longer fits in view.
+    steady = null,
   },
   ref,
 ) {
@@ -95,7 +99,10 @@ const Preview = forwardRef(function Preview(
     orbit.enablePan = true;
     orbit.screenSpacePanning = true;
     orbit.zoomToCursor = true;
-    orbit.addEventListener("start", () => stopRef.current?.());
+    orbit.addEventListener("start", () => {
+      stopRef.current?.();
+      if (st.current) st.current.userMoved = true;
+    });
 
     // Click a part to pick it; hovering a part lights it up a little.
     const ray = new THREE.Raycaster();
@@ -229,8 +236,18 @@ const Preview = forwardRef(function Preview(
     s.holder.clear();
     for (const { obj } of next.values()) s.holder.add(obj);
     s.parts = next;
-    // Center the whole model on the turntable.
-    s.holder.position.set(-(box.min.x + box.max.x) / 2, -(box.min.y + box.max.y) / 2, -box.min.z);
+    // Center the whole model on the turntable. A steady view keeps the first
+    // center, so adding a sword or wings doesn't slide the model sideways.
+    if (!steady || s.steadyKey !== steady) {
+      s.center = [(box.min.x + box.max.x) / 2, (box.min.y + box.max.y) / 2];
+      if (steady) {
+        s.steadyKey = steady;
+        s.framedFor = null;
+        s.userMoved = false;
+      }
+    }
+    s.steady = !!steady;
+    s.holder.position.set(-s.center[0], -s.center[1], -box.min.z);
     s.box = box;
     const size = new THREE.Vector3().subVectors(box.max, box.min);
     const radius = Math.max(size.x, size.y) * 0.62 + 8;
@@ -284,6 +301,10 @@ const Preview = forwardRef(function Preview(
     reframe: () => {
       const s = st.current;
       if (!s?.box) return;
+      s.userMoved = false;
+      s.center = [(s.box.min.x + s.box.max.x) / 2, (s.box.min.y + s.box.max.y) / 2];
+      s.holder.position.x = -s.center[0];
+      s.holder.position.y = -s.center[1];
       if (s.compareObj) placeCompare(s, s.compareId, true);
       else frame(s, new THREE.Vector3().subVectors(s.box.max, s.box.min), true);
     },
@@ -293,6 +314,7 @@ const Preview = forwardRef(function Preview(
     nudge: ({ turn = 0, tilt = 0, zoom = 1, panX = 0, panY = 0 }) => {
       const s = st.current;
       if (!s) return;
+      s.userMoved = true;
       stopRef.current?.();
       const m = (s.move ||= { turn: 0, tilt: 0, zoom: 0, panX: 0, panY: 0 });
       m.turn += turn;
@@ -401,6 +423,11 @@ function fitBox(s, box, force) {
 function frame(s, size, force) {
   const span = Math.max(size.x, size.y, size.z * 1.2, 20);
   if (!force && s.framedFor && span < s.framedFor * 1.25 && span > s.framedFor * 0.6) return;
+  // Once someone has turned or zoomed a steady view, leave their view alone
+  // unless the model has grown well past it.
+  if (!force && s.steady && s.userMoved && s.framedFor && span < s.framedFor * 2) return;
+  // A steady view grows to fit but keeps its angle and doesn't jump on small shrinks.
+  if (!force && s.steady && s.framedFor && span < s.framedFor && span > s.framedFor * 0.4) return;
   const first = !s.framedFor;
   s.framedFor = span;
   const dist = span * 2.2;

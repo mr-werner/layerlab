@@ -9,6 +9,7 @@ import "./base.css";
 import Landing from "./site/Landing.jsx";
 import Shop from "./site/Shop.jsx";
 import Discover from "./site/Discover.jsx";
+import Apps from "./site/Apps.jsx";
 import { CALLBACK_PATH, finishSketchfabSignIn } from "./sketchfabAuth.js";
 
 // The maker and the studio load the 3D engine, so they only load on their own pages.
@@ -36,6 +37,8 @@ const PAGES = {
   "/shop": Shop,
   "/discover": Discover,
   "/community": Discover,
+  "/apps": Apps,
+  "/tools": Apps,
   "/upload": Remix,
   "/remix": Remix,
   "/make": Maker,
