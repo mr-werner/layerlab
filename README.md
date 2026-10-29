@@ -50,6 +50,8 @@ Built on the ProtoLab CAD engine (replicad/OpenCascade + Manifold, in a web work
 
 - Sketchfab and the Smithsonian (CC0 museum scans) are searched from the browser. Smithsonian models open straight in the upload page.
 - "Sign in with Sketchfab" lets Sketchfab models load straight into the builder. Register an app at Sketchfab (implicit grant, redirect URI `https://layerlab.blueprintwebstudio.com/auth/sketchfab`), then set `SKETCHFAB_CLIENT_ID` in Vercel. Until then the button stays hidden.
+- Poly Haven (CC0, no key) is searched from the browser; its models load into the upload page as shape only (`src/polyhaven.js`).
+- "Show models from" chips on the home page and /discover turn sources on and off, remembered in the browser.
 - Thingiverse, MyMiniFactory and Poly Pizza (CC0/CC BY low-poly models that open straight in the builder) show in Explore once `THINGIVERSE_TOKEN`, `MYMINIFACTORY_KEY` or `POLY_PIZZA_KEY` is set (searched through `api/search.js` so the keys stay private).
 - "Made for 3D printing only" on /discover narrows Sketchfab to models tagged for printing.
 - Models that aren't watertight get repaired on import (`src/cad/repair.js`): weld first, then rebuild as a solid if needed.
@@ -58,6 +60,7 @@ Built on the ProtoLab CAD engine (replicad/OpenCascade + Manifold, in a web work
 
 - `src/maker/ViewControls.jsx`: buttons to turn, tilt, zoom and move the view (hold to repeat), a Turn/Move switch for one-finger or left-button drags, Recenter, Spin, and a "?" card.
 - `src/maker/compare.js`: the Size check menu stands a tape measure, ruler, yardstick, banana, apple, phone, soda can, credit card, quarter or pencil (real sizes) next to the model, or draws its dimensions.
+- The figure builder (`src/figure.js` options, looks and picture settings; `src/figureBuild.js` shapes) has styles that change the proportions (`STYLES`), options grouped by `group` (tab) and `sub` (sub-tab), a `top` option (Whole figure size) above the tabs, and choices that bring others with them (`sets`).
 - Every figure feature has a size slider. `npm test` runs `scripts/test-pieces.mjs`, which builds every choice at 50, 100 and 180% plus random mixes and fails if any figure comes out in more than one piece.
 
 ## Develop

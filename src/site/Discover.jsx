@@ -1,8 +1,7 @@
 import { useEffect, useState } from "react";
 import { Header, Footer } from "./Chrome.jsx";
-import { SearchBox, TopicChips, ModelGrid, ModelModal, useExplore } from "./Gallery.jsx";
+import { SearchBox, TopicChips, ModelGrid, ModelModal, SourcePicker, useExplore, useSourcesOff } from "./Gallery.jsx";
 import { TOPICS } from "../gallery.js";
-import { SOURCE_INFO } from "../sources.js";
 import { STORES, FLAGS, LICENSES, storeLink, rememberTrip } from "../stores.js";
 import "./site.css";
 
@@ -11,24 +10,17 @@ export default function Discover() {
   const [q, setQ] = useState(start);
   const [term, setTerm] = useState(start);
   const [topic, setTopic] = useState(TOPICS[0]);
-  const [source, setSource] = useState("all");
   const [open, setOpen] = useState(null);
   const [printOnly, setPrintOnly] = useState(true);
-  const explore = useExplore(term, term ? null : topic, { printOnly });
+  const [off, setOff] = useSourcesOff();
+  const explore = useExplore(term, term ? null : topic, { printOnly, off });
 
   useEffect(() => {
     window.history.replaceState(null, "", term ? `/discover?q=${encodeURIComponent(term)}` : "/discover");
   }, [term]);
 
-  const SOURCES = [
-    { id: "all", label: "Everything" },
-    ...["layerlab", ...explore.sources].map((id) => ({ id, label: SOURCE_INFO[id]?.name || id })),
-  ];
-  const ours = source === "all" || source === "layerlab" ? explore.ours : [];
-  const live = source === "all" ? explore.live : source === "layerlab" ? [] : explore.pick(source);
-  const liveState = source === "all" ? explore.state : source === "layerlab" ? "idle" : explore.bySource[source]?.state || "idle";
   const label = term || (topic.id === "all" ? "" : topic.label);
-  const others = STORES.filter((s) => !explore.sources.includes(s.id));
+  const others = STORES.filter((s) => !explore.all.includes(s.id));
 
   return (
     <div className="site">
@@ -46,40 +38,21 @@ export default function Discover() {
               setQ("");
             }}
           />
-          <div className="seg" role="tablist" aria-label="Source">
-            {SOURCES.map((s) => (
-              <button
-                key={s.id}
-                role="tab"
-                aria-selected={source === s.id}
-                className={source === s.id ? "on" : ""}
-                onClick={() => setSource(s.id)}
-              >
-                {s.label}
-              </button>
-            ))}
-          </div>
         </div>
+        <SourcePicker all={explore.all} off={off} onChange={setOff} />
         <label className="print-only">
           <input type="checkbox" checked={printOnly} onChange={(e) => setPrintOnly(e.target.checked)} />
-          Made for 3D printing only <small>Turn off to see every downloadable Sketchfab model (many more, but some need cleanup to print).</small>
+          Made for 3D printing only{" "}
+          <small>Turn off to see every downloadable Sketchfab model (many more, but some need cleanup to print).</small>
         </label>
       </section>
 
       <section className="gallery">
         <ModelGrid
-          ours={ours}
-          live={live}
-          state={liveState}
-          more={
-            source === "layerlab" || !explore.more
-              ? null
-              : source === "all"
-                ? explore.more
-                : explore.bySource[source]?.next
-                  ? () => explore.more(source)
-                  : null
-          }
+          ours={explore.ours}
+          live={explore.live}
+          state={explore.sources.length ? explore.state : "idle"}
+          more={explore.more}
           onOpen={setOpen}
           empty="Nothing here yet. Try another word, or search the stores below."
         />

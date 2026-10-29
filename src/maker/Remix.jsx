@@ -137,6 +137,9 @@ export default function Remix() {
         if (sf) {
           const { downloadSketchfab } = await import("../sketchfabAuth.js");
           got = await downloadSketchfab(sf, setLoading);
+        } else if (si.startsWith("polyhaven:")) {
+          const { downloadPolyHaven } = await import("../polyhaven.js");
+          got = await downloadPolyHaven(si.slice(10), setLoading);
         } else {
           const { directSource } = await import("../sources.js");
           const from = directSource(si);

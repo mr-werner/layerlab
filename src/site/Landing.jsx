@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Header, Footer } from "./Chrome.jsx";
-import { SearchBox, TopicChips, ModelGrid, ModelModal, useExplore } from "./Gallery.jsx";
+import { SearchBox, TopicChips, ModelGrid, ModelModal, SourcePicker, useExplore, useSourcesOff } from "./Gallery.jsx";
 import { FIGURE, FIGURE_LOOKS, lookUrl } from "../figure.js";
 import { TOPICS } from "../gallery.js";
 import "./site.css";
@@ -17,7 +17,8 @@ export default function Landing() {
     const t = setTimeout(() => setTerm(q.trim()), 350);
     return () => clearTimeout(t);
   }, [q]);
-  const explore = useExplore(term, term ? null : topic);
+  const [off, setOff] = useSourcesOff();
+  const explore = useExplore(term, term ? null : topic, { off });
   return (
     <div className="site">
       <Header active="/" search={false} />
@@ -55,6 +56,7 @@ export default function Landing() {
           </a>
         </div>
         {!term && <TopicChips topic={topic} onPick={setTopic} />}
+        <SourcePicker all={explore.all} off={off} onChange={setOff} />
         <ModelGrid
           ours={explore.ours}
           live={explore.live.slice(0, 16)}
@@ -77,7 +79,7 @@ export default function Landing() {
           </a>
         </div>
         <div className="creator-looks">
-          {FIGURE_LOOKS.map((f) => (
+          {FIGURE_LOOKS.filter((f) => f.home).map((f) => (
             <a key={f.id} href={lookUrl(f)} className="look">
               <img src={`/shots/fig-${f.id}.png`} alt="" loading="lazy" />
               <span>{f.name}</span>

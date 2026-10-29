@@ -2,20 +2,32 @@
 // grid, with a viewer that opens right on the page.
 import { useEffect, useMemo, useRef, useState } from "react";
 import { embedSrc } from "../sketchfab.js";
-import { liveSources, searchSource, SOURCE_INFO } from "../sources.js";
+import { liveSources, searchSource, SOURCE_INFO, sourcesOff, saveSourcesOff } from "../sources.js";
 import { siteConfig, sketchfabToken, signInSketchfab } from "../sketchfabAuth.js";
 import { ourMatches, TOPICS } from "../gallery.js";
 import { LICENSE_BY_ID, rememberTrip } from "../stores.js";
 
 // Our items first, then live results from every source; "more" loads the
 // next page from each source that has one.
-export function useExplore(q, topic, { printOnly = true } = {}) {
+// Which sources are turned off, remembered in this browser.
+export function useSourcesOff() {
+  const [off, setOff] = useState(sourcesOff);
+  const change = (next) => {
+    setOff(next);
+    saveSourcesOff(next);
+  };
+  return [off, change];
+}
+
+export function useExplore(q, topic, { printOnly = true, off = new Set() } = {}) {
   const [bySource, setBySource] = useState({}); // id -> { items, next, state }
-  const [sources, setSources] = useState(["sketchfab", "smithsonian"]);
+  const [found, setFound] = useState(["sketchfab", "smithsonian", "polyhaven"]);
+  const offKey = [...off].sort().join(",");
+  const sources = useMemo(() => found.filter((id) => !off.has(id)), [found, offKey]); // eslint-disable-line react-hooks/exhaustive-deps
   const query = (q || topic?.q || "").trim();
   useEffect(() => {
     let alive = true;
-    liveSources().then((s) => alive && setSources(s));
+    liveSources().then((s) => alive && setFound(s));
     return () => {
       alive = false;
     };
@@ -30,7 +42,7 @@ export function useExplore(q, topic, { printOnly = true } = {}) {
     }
     return () => ctl.abort();
   }, [query, sources, printOnly]);
-  const ours = useMemo(() => ourMatches(q, topic), [q, topic]);
+  const ours = useMemo(() => (off.has("layerlab") ? [] : ourMatches(q, topic)), [q, topic, offKey]); // eslint-disable-line react-hooks/exhaustive-deps
   const more = async (only) => {
     const ids = sources.filter((id) => bySource[id]?.next && (!only || only === id));
     for (const id of ids) {
@@ -50,7 +62,47 @@ export function useExplore(q, topic, { printOnly = true } = {}) {
   const states = sources.map((id) => bySource[id]?.state);
   const state = states.every((x) => x === "error") ? "error" : states.includes("loading") ? "loading" : "idle";
   const hasMore = sources.some((id) => bySource[id]?.next);
-  return { ours, live: pick(), pick, sources, bySource, more: hasMore ? more : null, state };
+  return { ours, live: pick(), pick, sources, all: found, bySource, more: hasMore ? more : null, state };
+}
+
+// Chips to choose where results come from. Turning off a store someone has no
+// account with keeps it out of their results.
+export function SourcePicker({ all, off, onChange }) {
+  const ids = ["layerlab", ...all];
+  const flip = (id) => {
+    const next = new Set(off);
+    if (next.has(id)) next.delete(id);
+    else if (ids.filter((x) => !next.has(x)).length > 1) next.add(id);
+    onChange(next);
+  };
+  return (
+    <div className="src-pick" role="group" aria-label="Show models from">
+      <span className="src-pick-label">Show models from</span>
+      {ids.map((id) => {
+        const info = SOURCE_INFO[id] || { name: id };
+        const on = !off.has(id);
+        return (
+          <button
+            key={id}
+            type="button"
+            aria-pressed={on}
+            className={on ? "on" : ""}
+            onClick={() => flip(id)}
+            title={info.account ? `Downloading from ${info.name} needs a free ${info.name} account` : "No sign-up needed"}
+          >
+            <span className={`dot ${id}`} aria-hidden="true" />
+            {info.name}
+            {info.account === false && id !== "layerlab" && <small>no sign-up</small>}
+          </button>
+        );
+      })}
+      {off.size > 0 && (
+        <button type="button" className="src-all" onClick={() => onChange(new Set())}>
+          Show all
+        </button>
+      )}
+    </div>
+  );
 }
 
 export function SearchBox({ value, onChange, onSubmit, big, placeholder = "Search dragons, planters, phone stands…" }) {

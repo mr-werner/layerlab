@@ -5,6 +5,7 @@ import { Control, RegionColors } from "./Controls.jsx";
 import { useBuild, colorGroups, inches, download } from "./useBuild.js";
 import { Header } from "../site/Chrome.jsx";
 import { KITS, KIT_BY_ID, defaultValues, cleanValues, randomValues, buildKit, kitRegions, defaultColors } from "../kits.js";
+import { FIGURE_LOOKS } from "../figure.js";
 import { PRODUCT_BY_ID } from "../catalog.js";
 import { cad } from "../cad/client.js";
 import { BUILD_VOLUME, COLORS, SITE, estimatePrice } from "../config.js";
@@ -69,7 +70,8 @@ export default function Maker() {
   const [values, setValues] = useState(start.values);
   const [colors, setColors] = useState(start.colors);
   const [history, setHistory] = useState([]);
-  const [tab, setTab] = useState(start.kit.options[0].group);
+  const [tab, setTabOnly] = useState(start.kit.options[0].group);
+  const [sub, setSub] = useState(null); // sub-tab inside a tab, if it has them
   const [part, setPart] = useState(null); // the part whose color is open
   const [picked, setPicked] = useState(null); // { region } flashes in the preview
   const [spin, setSpin] = useState(true);
@@ -82,7 +84,12 @@ export default function Maker() {
   const shot = !!shotOpts;
   const regions = useMemo(() => kitRegions(kit), [kit]);
 
-  const groups = useMemo(() => [...new Set(kit.options.map((o) => o.group)), "All colors"], [kit]);
+  const groups = useMemo(() => [...new Set(kit.options.filter((o) => !o.top).map((o) => o.group)), "All colors"], [kit]);
+  const subsOf = (g) => [...new Set(kit.options.filter((o) => o.group === g && o.sub).map((o) => o.sub))];
+  const setTab = (g, s = null) => {
+    setTabOnly(g);
+    setSub(s || subsOf(g)[0] || null);
+  };
   const parts = useMemo(() => buildKit(kit, values), [kit, values]);
 
   const { meshes, size, status, error } = useBuild(parts);
@@ -148,7 +155,18 @@ export default function Maker() {
 
   const setValue = (id, v, { commit = true } = {}) => {
     if (commit) remember();
-    setValues((cur) => ({ ...cur, [id]: v }));
+    // Some choices bring others with them (a style picks a head and body).
+    const sets = kit.options.find((o) => o.id === id)?.sets?.[v] || {};
+    setValues((cur) => ({ ...cur, ...sets, [id]: v }));
+  };
+
+  const applyLook = (look) => {
+    remember();
+    setValues(cleanValues(kit, { ...defaultValues(kit), ...look.values }));
+    const cs = defaultColors(kit, COLORS[4].value);
+    for (const [r, c] of Object.entries(look.colors || {})) if (r in cs) cs[r] = c;
+    setColors(cs);
+    setSpin(true);
   };
 
   const pickKit = (k) => {
@@ -181,6 +199,7 @@ export default function Maker() {
   const reset = () => {
     remember();
     setValues(defaultValues(kit));
+    setColors(defaultColors(kit, COLORS[4].value));
   };
 
   const fits = size && size[0] <= BUILD_VOLUME.x && size[1] <= BUILD_VOLUME.y && size[2] <= BUILD_VOLUME.z;
@@ -263,8 +282,11 @@ export default function Maker() {
     );
   }
 
-  const options = kit.options.filter((o) => o.group === tab && (!o.when || o.when(values)));
-  const tabRegions = regions.filter((r) => (r.tab || groups[0]) === tab);
+  const shown = (o) => !o.when || o.when(values);
+  const subs = subsOf(tab);
+  const options = kit.options.filter((o) => !o.top && o.group === tab && (!subs.length || o.sub === sub) && shown(o));
+  const topOptions = kit.options.filter((o) => o.top && shown(o));
+  const tabRegions = regions.filter((r) => (r.tab || groups[0]) === tab && (!subs.length || !r.sub || r.sub === sub));
   const paint = (c) => {
     remember();
     setColors(c);
@@ -273,7 +295,7 @@ export default function Maker() {
   const pickPart = (region) => {
     const r = regions.find((x) => x.id === region);
     if (!r) return;
-    setTab(r.tab || groups[0]);
+    setTab(r.tab || groups[0], r.sub);
     setPart(region);
     setPicked({ region });
     setSpin(false);
@@ -368,6 +390,23 @@ export default function Maker() {
             <h2>{kit.name}</h2>
             <p>{kit.tagline}</p>
           </div>
+          {topOptions.map((op) => (
+            <div className="mk-top" key={op.id}>
+              <Control
+                op={
+                  size
+                    ? {
+                        ...op,
+                        hint: `Now ${(size[2] / 10).toFixed(1)} cm (${inches(size[2])} in) tall. Every part grows or shrinks together.`,
+                      }
+                    : op
+                }
+                value={values[op.id]}
+                onChange={setValue}
+                kitId={kit.id}
+              />
+            </div>
+          ))}
           <div className="mk-tabs" role="tablist">
             {groups.map((g) => (
               <button key={g} role="tab" aria-selected={tab === g} className={tab === g ? "on" : ""} onClick={() => setTab(g)}>
@@ -375,6 +414,15 @@ export default function Maker() {
               </button>
             ))}
           </div>
+          {subs.length > 1 && (
+            <div className="mk-subtabs" role="tablist" aria-label={`${tab} parts`}>
+              {subs.map((x) => (
+                <button key={x} role="tab" aria-selected={sub === x} className={sub === x ? "on" : ""} onClick={() => setSub(x)}>
+                  {x}
+                </button>
+              ))}
+            </div>
+          )}
           <div className="mk-controls" role="tabpanel">
             {tab === "All colors" ? (
               <RegionColors
@@ -399,6 +447,19 @@ export default function Maker() {
                 {options.map((op) => (
                   <Control key={op.id} op={op} value={values[op.id]} onChange={setValue} kitId={kit.id} />
                 ))}
+                {kit.id === "figure" && tab === "Style" && (
+                  <div className="mk-looks">
+                    <div className="mk-label">Start from a look</div>
+                    <div className="mk-looks-grid">
+                      {FIGURE_LOOKS.map((l) => (
+                        <button key={l.id} onClick={() => applyLook(l)}>
+                          <img src={`/shots/fig-${l.id}.png`} alt="" loading="lazy" />
+                          <span>{l.name}</span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </>
             )}
           </div>

@@ -22,7 +22,9 @@
   margin: 0 0 10px;
 }
 .mk-kits h2 {
-  font: 600 12px/1 "Inter", sans-serif;
+  font:
+    600 12px/1 "Inter",
+    sans-serif;
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--muted);
@@ -94,11 +96,18 @@
 }
 
 /* Stage */
+/* The 3D view stays on screen while the options scroll past it. */
 .mk-stage {
   display: flex;
   flex-direction: column;
   gap: 12px;
   min-width: 0;
+  position: sticky;
+  top: 80px;
+  align-self: start;
+  height: calc(100vh - 96px);
+  height: calc(100dvh - 96px);
+  min-height: 480px;
 }
 .mk-view {
   position: relative;
@@ -245,8 +254,6 @@
   padding: 20px;
   box-shadow: var(--shadow);
   align-self: start;
-  position: sticky;
-  top: 76px;
 }
 .mk-panel-head h2 {
   font-size: 28px;
@@ -345,7 +352,9 @@
   border-radius: 50%;
   background: #fff;
   border: 0;
-  box-shadow: 0 0 0 1px var(--line), 0 2px 8px rgba(22, 20, 28, 0.25);
+  box-shadow:
+    0 0 0 1px var(--line),
+    0 2px 8px rgba(22, 20, 28, 0.25);
 }
 .mk-slider input[type="range"]::-moz-range-thumb {
   width: 24px;
@@ -353,7 +362,9 @@
   border-radius: 50%;
   background: #fff;
   border: 0;
-  box-shadow: 0 0 0 1px var(--line), 0 2px 8px rgba(22, 20, 28, 0.25);
+  box-shadow:
+    0 0 0 1px var(--line),
+    0 2px 8px rgba(22, 20, 28, 0.25);
 }
 .mk-choices {
   display: grid;
@@ -667,7 +678,9 @@
   background: var(--viewer);
   border: 2px dashed transparent;
   border-radius: 28px;
-  transition: border-color 0.15s, background 0.15s;
+  transition:
+    border-color 0.15s,
+    background 0.15s;
 }
 .rx-drop.over {
   border-color: var(--accent);
@@ -817,6 +830,19 @@ body:has(.shot) {
     min-height: 0;
     aspect-ratio: 1 / 0.92;
     flex: none;
+  }
+  /* The view sticks under the header so the options scroll beneath it. */
+  .mk-stage {
+    display: contents;
+  }
+  .mk-view:not(.empty) {
+    position: sticky;
+    top: 70px;
+    z-index: 6;
+    aspect-ratio: auto;
+    height: 42vh;
+    height: 42dvh;
+    box-shadow: 0 10px 24px rgba(0, 0, 0, 0.45);
   }
   .mk-kit {
     flex-direction: column;
@@ -1221,4 +1247,69 @@ body:has(.shot) {
   .mk-drag-hint {
     display: none;
   }
+}
+
+/* Whole-figure size, above the tabs */
+.mk-top {
+  padding: 14px 16px 12px;
+  border-radius: 18px;
+  background: var(--bg);
+  border: 1px solid var(--line);
+}
+.mk-top .mk-hint {
+  margin-top: 6px;
+}
+/* Parts inside a tab (Head: Shape, Eyes, Nose…) */
+.mk-subtabs {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-top: -6px;
+}
+.mk-subtabs button {
+  padding: 6px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: transparent;
+  color: var(--ink-2);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.mk-subtabs button:hover {
+  color: var(--ink);
+  border-color: var(--ink-2);
+}
+.mk-subtabs button.on {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-ink);
+}
+.mk-looks-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(82px, 1fr));
+  gap: 8px;
+}
+.mk-looks-grid button {
+  display: grid;
+  gap: 4px;
+  justify-items: center;
+  padding: 6px 4px 8px;
+  border-radius: 14px;
+  border: 1px solid var(--line);
+  background: var(--bg);
+  color: var(--ink);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.mk-looks-grid button:hover {
+  border-color: var(--accent);
+}
+.mk-looks-grid img {
+  width: 100%;
+  aspect-ratio: 1;
+  object-fit: contain;
 }

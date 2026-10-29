@@ -120,7 +120,11 @@
   font-size: 15px;
   text-decoration: none;
   cursor: pointer;
-  transition: transform 0.15s, background 0.15s, box-shadow 0.15s, border-color 0.15s;
+  transition:
+    transform 0.15s,
+    background 0.15s,
+    box-shadow 0.15s,
+    border-color 0.15s;
   white-space: nowrap;
 }
 .btn:hover {
@@ -215,7 +219,9 @@
   width: 100%;
   max-width: 680px;
   color: var(--muted);
-  transition: border-color 0.15s, box-shadow 0.15s;
+  transition:
+    border-color 0.15s,
+    box-shadow 0.15s;
 }
 .searchbox:focus-within {
   border-color: var(--accent);
@@ -330,9 +336,7 @@
   margin: 48px auto 0;
   padding: clamp(28px, 5vw, 56px);
   border-radius: 32px;
-  background:
-    radial-gradient(60% 80% at 100% 0%, rgba(143, 124, 255, 0.22), transparent 60%),
-    var(--surface);
+  background: radial-gradient(60% 80% at 100% 0%, rgba(143, 124, 255, 0.22), transparent 60%), var(--surface);
   border: 1px solid var(--line);
 }
 .creator-copy p:not(.eyebrow) {
@@ -354,7 +358,9 @@
   place-items: center;
   text-decoration: none;
   border: 1px solid var(--line);
-  transition: transform 0.2s, border-color 0.2s;
+  transition:
+    transform 0.2s,
+    border-color 0.2s;
 }
 .look:hover {
   transform: translateY(-3px);
@@ -483,7 +489,10 @@
   text-decoration: none;
   overflow: hidden;
   cursor: pointer;
-  transition: transform 0.2s, border-color 0.2s, box-shadow 0.2s;
+  transition:
+    transform 0.2s,
+    border-color 0.2s,
+    box-shadow 0.2s;
 }
 .mcard:hover {
   transform: translateY(-4px);
@@ -748,7 +757,9 @@
   height: 36px;
   border-radius: 10px;
   color: #fff;
-  font: 700 16px/1 "Inter", sans-serif;
+  font:
+    700 16px/1 "Inter",
+    sans-serif;
   font-style: normal;
 }
 .store span {
@@ -830,7 +841,9 @@
   background: var(--surface);
   border: 1px solid var(--line);
   text-decoration: none;
-  transition: border-color 0.2s, transform 0.2s;
+  transition:
+    border-color 0.2s,
+    transform 0.2s;
 }
 .flow-step:hover {
   border-color: var(--accent);
@@ -856,9 +869,7 @@
   padding: 44px 24px;
   text-align: center;
   border-radius: 28px;
-  background:
-    radial-gradient(50% 100% at 50% 0%, rgba(198, 255, 74, 0.14), transparent 70%),
-    var(--surface);
+  background: radial-gradient(50% 100% at 50% 0%, rgba(198, 255, 74, 0.14), transparent 70%), var(--surface);
   border: 1px solid var(--line);
 }
 .cta-band h2 {
@@ -1096,4 +1107,84 @@
 .print-only small {
   color: var(--muted);
   font-size: 12px;
+}
+.src.polyhaven {
+  color: #b3f07a;
+}
+
+/* Where results come from */
+.src-pick {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-top: 14px;
+}
+.src-pick-label {
+  font-size: 13px;
+  color: var(--muted);
+  margin-right: 4px;
+}
+.src-pick button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  text-decoration: line-through;
+  text-decoration-color: rgba(255, 255, 255, 0.35);
+}
+.src-pick button.on {
+  color: var(--ink);
+  border-color: var(--line-2);
+  background: var(--surface);
+  text-decoration: none;
+}
+.src-pick button small {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--accent);
+}
+.src-pick .dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: currentColor;
+  opacity: 0.35;
+}
+.src-pick button.on .dot {
+  opacity: 1;
+}
+.src-pick .dot.layerlab {
+  color: var(--accent);
+}
+.src-pick .dot.sketchfab {
+  color: var(--cyan);
+}
+.src-pick .dot.smithsonian {
+  color: #ffc35a;
+}
+.src-pick .dot.polyhaven {
+  color: #b3f07a;
+}
+.src-pick .dot.thingiverse {
+  color: #5fb0ff;
+}
+.src-pick .dot.myminifactory {
+  color: #ff8a6a;
+}
+.src-pick .dot.polypizza {
+  color: #ff9ad5;
+}
+.src-pick .src-all {
+  text-decoration: none;
+  color: var(--accent);
+  border-style: dashed;
 }
